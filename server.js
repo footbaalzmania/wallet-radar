@@ -6,21 +6,21 @@ const products = [
   {
     brand: "Trezor",
     name: "Safe 3",
-    price: "€59",
+    price: "1 499 Kč",
     status: "Good deal",
     url: "https://trezor.io/trezor-safe-3"
   },
   {
     brand: "Trezor",
     name: "Safe 5",
-    price: "€119",
+    price: "3 199 Kč",
     status: "Good deal",
     url: "https://trezor.io/trezor-safe-5"
   },
   {
     brand: "Ledger",
     name: "Nano S Plus",
-    price: "€47.90",
+    price: "1 299 Kč",
     status: "Good deal",
     url: "https://www.ledger.com/ledger-nano-s-plus"
   }
