@@ -1,0 +1,41 @@
+[
+  {
+    "brand": "Trezor",
+    "name": "Safe 3",
+    "slug": "trezor-safe-3",
+    "currency": "CZK",
+    "offers": [
+      {
+        "store": "Alza",
+        "price": 1499,
+        "url": "https://www.alza.cz/trezor-safe-3-cosmic-black-d12293893.htm"
+      }
+    ]
+  },
+  {
+    "brand": "Trezor",
+    "name": "Safe 5",
+    "slug": "trezor-safe-5",
+    "currency": "CZK",
+    "offers": [
+      {
+        "store": "Alza",
+        "price": 3199,
+        "url": "https://www.alza.cz/hardware-penezenky-a-trezory/18862141.htm"
+      }
+    ]
+  },
+  {
+    "brand": "Ledger",
+    "name": "Nano S Plus",
+    "slug": "ledger-nano-s-plus",
+    "currency": "CZK",
+    "offers": [
+      {
+        "store": "Alza",
+        "price": 1299,
+        "url": "https://www.alza.cz/hardware-penezenky-a-trezory/18862141.htm"
+      }
+    ]
+  }
+]
