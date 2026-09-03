@@ -1,0 +1,12 @@
+{
+  "name": "wallet-radar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hardware wallet price radar",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
