@@ -2,29 +2,30 @@ const http = require("http");
 
 const PORT = process.env.PORT || 3000;
 
-const products = [
-  {
-    brand: "Trezor",
-    name: "Safe 3",
-    price: "1 499 Kč",
+const fs = require("fs");
+const path = require("path");
+
+const productsData = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "products.json"), "utf8")
+);
+
+const products = productsData.map((product) => {
+  const offers = (product.offers || [])
+    .filter((offer) => typeof offer.price === "number")
+    .sort((a, b) => a.price - b.price);
+
+  const bestOffer = offers[0];
+
+  return {
+    brand: product.brand,
+    name: product.name,
+    price: bestOffer
+      ? new Intl.NumberFormat("cs-CZ").format(bestOffer.price) + " Kč"
+      : "N/A",
     status: "Good deal",
-    url: "https://trezor.io/trezor-safe-3"
-  },
-  {
-    brand: "Trezor",
-    name: "Safe 5",
-    price: "3 199 Kč",
-    status: "Good deal",
-    url: "https://trezor.io/trezor-safe-5"
-  },
-  {
-    brand: "Ledger",
-    name: "Nano S Plus",
-    price: "1 299 Kč",
-    status: "Good deal",
-    url: "https://www.ledger.com/ledger-nano-s-plus"
-  }
-];
+    url: bestOffer?.url || "#"
+  };
+});
 
 function page() {
   const cards = products.map(product => `
