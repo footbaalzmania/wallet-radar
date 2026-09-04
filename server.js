@@ -261,6 +261,10 @@ const products = productsData.map((product) => {
  *   TREZOR_NETWORK_ID
  *
  * The API key is never hard-coded into the source code.
+ *
+ * This test generates a tracking link for:
+ *   Trezor Safe 5
+ *   Offer ID: 235
  */
 
 async function trezorApiTest(res) {
@@ -283,20 +287,11 @@ async function trezorApiTest(res) {
   const params = new URLSearchParams({
     api_key: apiKey,
     Target: "Affiliate_Offer",
-    Method: "findAll",
-    limit: "20"
+    Method: "generateTrackingLink",
+    offer_id: "235"
   });
 
-  [
-    "id",
-    "name",
-    "currency",
-    "percent_payout",
-    "preview_url",
-    "status"
-  ].forEach((field) => {
-    params.append("fields[]", field);
-  });
+  params.append("params[source]", "walletradar");
 
   const apiUrl =
     `https://${networkId}.api.hasoffers.com/Apiv3/json?${params.toString()}`;
@@ -312,10 +307,11 @@ async function trezorApiTest(res) {
     res.end(JSON.stringify({
       ok: response.ok && data?.response?.status === 1,
       networkId,
+      offerId: 235,
       httpStatus: response.status,
       apiStatus: data?.response?.status ?? null,
       errorMessage: data?.response?.errorMessage ?? null,
-      offers: data?.response?.data ?? []
+      data: data?.response?.data ?? null
     }, null, 2));
 
   } catch (error) {
@@ -326,6 +322,7 @@ async function trezorApiTest(res) {
     res.end(JSON.stringify({
       ok: false,
       networkId,
+      offerId: 235,
       error: "Trezor API request failed",
       message: error.message
     }, null, 2));
