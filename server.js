@@ -2756,6 +2756,31 @@ const server =
 
         const pathname =
           url.pathname;
+        /* STATIC PRODUCT IMAGES */
+
+if (
+  pathname === "/trezor-safe-5.avif" ||
+  pathname === "/trezor-safe-3.avif"
+) {
+  const filename = pathname.slice(1);
+  const filePath = path.join(__dirname, filename);
+
+  if (!fs.existsSync(filePath)) {
+    return serveText(
+      res,
+      404,
+      "Image not found",
+      "text/plain; charset=utf-8"
+    );
+  }
+
+  res.writeHead(200, {
+    "Content-Type": "image/avif",
+    "Cache-Control": "public, max-age=31536000, immutable"
+  });
+
+  return res.end(fs.readFileSync(filePath));
+}
 
         /* HEALTH */
 
