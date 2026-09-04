@@ -2921,7 +2921,52 @@ const server =
 
           return res.end();
         }
+/* STATIC IMAGES */
 
+if (pathname.startsWith("/images/")) {
+  const relativePath = pathname.replace(/^\/+/, "");
+  const filePath = path.join(__dirname, relativePath);
+  const imagesRoot = path.join(__dirname, "images");
+
+  if (!filePath.startsWith(imagesRoot + path.sep)) {
+    return serveText(
+      res,
+      403,
+      "Forbidden",
+      "text/plain; charset=utf-8"
+    );
+  }
+
+  if (!fs.existsSync(filePath)) {
+    return serveText(
+      res,
+      404,
+      "Image not found",
+      "text/plain; charset=utf-8"
+    );
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+
+  const contentTypes = {
+    ".avif": "image/avif",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml"
+  };
+
+  const contentType =
+    contentTypes[ext] || "application/octet-stream";
+
+  res.writeHead(200, {
+    "Content-Type": contentType,
+    "Cache-Control": "public, max-age=31536000, immutable"
+  });
+
+  return res.end(fs.readFileSync(filePath));
+}
         /* COMPARE */
 
         if (
