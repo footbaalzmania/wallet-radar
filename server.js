@@ -1,13 +1,37 @@
 const http = require("http");
-
-const PORT = process.env.PORT || 3000;
-
 const fs = require("fs");
 const path = require("path");
+
+const PORT = process.env.PORT || 3000;
 
 const productsData = JSON.parse(
   fs.readFileSync(path.join(__dirname, "products.json"), "utf8")
 );
+
+/*
+ * Trezor affiliate offer IDs.
+ *
+ * These are official Trezor affiliate offers available
+ * through the Trezor/TUNE affiliate account.
+ */
+const TREZOR_OFFERS = {
+  "trezor-safe-3": 239,
+  "trezor-safe-5": 235
+};
+
+/*
+ * Small in-memory cache.
+ *
+ * We do not want to call the affiliate API on every
+ * page refresh.
+ */
+const affiliateCache = new Map();
+
+const AFFILIATE_CACHE_MS = 60 * 60 * 1000;
+
+/* -------------------------------------------------- */
+/* Helpers                                            */
+/* -------------------------------------------------- */
 
 function formatPrice(price, currency) {
   if (price === null || price === undefined) {
@@ -19,6 +43,7 @@ function formatPrice(price, currency) {
     currency: currency || "CZK"
   }).format(price);
 }
+
 
 function buildPriceChart(history, currency) {
   if (!history || history.length === 0) {
@@ -34,28 +59,55 @@ function buildPriceChart(history, currency) {
 
     return `
       <div class="chart-wrap">
-        <svg viewBox="0 0 600 180" class="chart" role="img"
-             aria-label="Price history">
-          <line x1="40" y1="140" x2="570" y2="140"
-                stroke="#27272a" stroke-width="1"/>
-          <line x1="40" y1="30" x2="40" y2="140"
-                stroke="#27272a" stroke-width="1"/>
+        <svg
+          viewBox="0 0 600 180"
+          class="chart"
+          role="img"
+          aria-label="Price history"
+        >
+          <line
+            x1="40"
+            y1="140"
+            x2="570"
+            y2="140"
+            stroke="#27272a"
+            stroke-width="1"
+          />
 
-          <circle cx="305" cy="85" r="6"
-                  fill="#a78bfa"/>
+          <line
+            x1="40"
+            y1="30"
+            x2="40"
+            y2="140"
+            stroke="#27272a"
+            stroke-width="1"
+          />
 
-          <text x="305" y="60"
-                text-anchor="middle"
-                fill="#f4f4f5"
-                font-size="15"
-                font-weight="700">
+          <circle
+            cx="305"
+            cy="85"
+            r="6"
+            fill="#a78bfa"
+          />
+
+          <text
+            x="305"
+            y="60"
+            text-anchor="middle"
+            fill="#f4f4f5"
+            font-size="15"
+            font-weight="700"
+          >
             ${formatPrice(point.price, currency)}
           </text>
 
-          <text x="305" y="165"
-                text-anchor="middle"
-                fill="#71717a"
-                font-size="12">
+          <text
+            x="305"
+            y="165"
+            text-anchor="middle"
+            fill="#71717a"
+            font-size="12"
+          >
             ${point.date}
           </text>
         </svg>
@@ -68,11 +120,13 @@ function buildPriceChart(history, currency) {
   }
 
   const prices = history.map(item => item.price);
+
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
 
   const width = 600;
   const height = 180;
+
   const left = 40;
   const right = 30;
   const top = 25;
@@ -84,11 +138,15 @@ function buildPriceChart(history, currency) {
   const range = maxPrice - minPrice || 1;
 
   const points = history.map((item, index) => {
-    const x = left + (index / (history.length - 1)) * chartWidth;
+    const x =
+      left +
+      (index / (history.length - 1)) *
+        chartWidth;
 
     const y =
       top +
-      (1 - (item.price - minPrice) / range) * chartHeight;
+      (1 - (item.price - minPrice) / range) *
+        chartHeight;
 
     return {
       x,
@@ -118,11 +176,12 @@ function buildPriceChart(history, currency) {
 
   return `
     <div class="chart-wrap">
-      <svg viewBox="0 0 ${width} ${height}"
-           class="chart"
-           role="img"
-           aria-label="Price history">
-
+      <svg
+        viewBox="0 0 ${width} ${height}"
+        class="chart"
+        role="img"
+        aria-label="Price history"
+      >
         <line
           x1="${left}"
           y1="${height - bottom}"
@@ -194,192 +253,448 @@ function buildPriceChart(history, currency) {
   `;
 }
 
-const products = productsData.map((product) => {
-  const offers = (product.offers || [])
-    .filter((offer) => typeof offer.price === "number")
-    .sort((a, b) => a.price - b.price);
 
-  const bestOffer = offers[0];
+/* -------------------------------------------------- */
+/* Trezor Affiliate API                               */
+/* -------------------------------------------------- */
 
-  const history = (product.priceHistory || [])
-    .filter((entry) => typeof entry.price === "number")
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
+async function generateTrezorTrackingLink(
+  productSlug
+) {
+  const offerId = TREZOR_OFFERS[productSlug];
 
-  const currentPrice = bestOffer?.price ?? null;
-
-  const lowestPrice = history.length
-    ? Math.min(...history.map((entry) => entry.price))
-    : currentPrice;
-
-  let dealScore = null;
-  let status = "Tracking started";
-
-  if (currentPrice !== null && lowestPrice !== null) {
-    if (currentPrice === lowestPrice) {
-      dealScore = 100;
-      status = "Best recorded price";
-    } else if (lowestPrice > 0) {
-      const aboveLowest =
-        ((currentPrice - lowestPrice) / lowestPrice) * 100;
-
-      dealScore = Math.max(
-        0,
-        Math.round(100 - aboveLowest * 2)
-      );
-
-      if (dealScore >= 80) {
-        status = "Good deal";
-      } else if (dealScore >= 50) {
-        status = "Fair price";
-      } else {
-        status = "Wait";
-      }
-    }
+  if (!offerId) {
+    return null;
   }
 
-  const currency = product.currency || "CZK";
-
-  return {
-    brand: product.brand,
-    name: product.name,
-    price: formatPrice(currentPrice, currency),
-    lowestPrice: formatPrice(lowestPrice, currency),
-    dealScore,
-    status,
-    currency,
-    history,
-    url: bestOffer?.url || "#"
-  };
-});
-
-
-/*
- * Trezor Affiliate API test
- *
- * Uses:
- *   TREZOR_API_KEY
- *   TREZOR_NETWORK_ID
- *
- * The API key is never hard-coded into the source code.
- *
- * This test generates a tracking link for:
- *   Trezor Safe 5
- *   Offer ID: 235
- */
-
-async function trezorApiTest(res) {
   const apiKey = process.env.TREZOR_API_KEY;
-  const networkId = process.env.TREZOR_NETWORK_ID || "trezor";
+  const networkId =
+    process.env.TREZOR_NETWORK_ID || "trezor";
 
   if (!apiKey) {
-    res.writeHead(500, {
-      "Content-Type": "application/json; charset=utf-8"
-    });
+    console.log(
+      "TREZOR_API_KEY is not configured."
+    );
 
-    res.end(JSON.stringify({
-      ok: false,
-      error: "TREZOR_API_KEY is not configured"
-    }));
+    return null;
+  }
 
-    return;
+  const cached =
+    affiliateCache.get(productSlug);
+
+  if (
+    cached &&
+    Date.now() - cached.timestamp <
+      AFFILIATE_CACHE_MS
+  ) {
+    return cached.url;
   }
 
   const params = new URLSearchParams({
     api_key: apiKey,
     Target: "Affiliate_Offer",
     Method: "generateTrackingLink",
-    offer_id: "235"
+    offer_id: String(offerId)
   });
 
-  params.append("params[source]", "walletradar");
+  params.append(
+    "params[source]",
+    "walletradar"
+  );
 
   const apiUrl =
     `https://${networkId}.api.hasoffers.com/Apiv3/json?${params.toString()}`;
 
   try {
     const response = await fetch(apiUrl);
+
+    if (!response.ok) {
+      console.log(
+        `Trezor API HTTP error: ${response.status}`
+      );
+
+      return null;
+    }
+
     const data = await response.json();
 
-    res.writeHead(response.ok ? 200 : 502, {
-      "Content-Type": "application/json; charset=utf-8"
+    if (
+      data?.response?.status !== 1
+    ) {
+      console.log(
+        "Trezor API error:",
+        data?.response?.errorMessage || "Unknown error"
+      );
+
+      return null;
+    }
+
+    const clickUrl =
+      data?.response?.data?.click_url;
+
+    if (!clickUrl) {
+      console.log(
+        "Trezor API returned no click_url."
+      );
+
+      return null;
+    }
+
+    affiliateCache.set(productSlug, {
+      url: clickUrl,
+      timestamp: Date.now()
     });
 
-    res.end(JSON.stringify({
-      ok: response.ok && data?.response?.status === 1,
-      networkId,
-      offerId: 235,
-      httpStatus: response.status,
-      apiStatus: data?.response?.status ?? null,
-      errorMessage: data?.response?.errorMessage ?? null,
-      data: data?.response?.data ?? null
-    }, null, 2));
+    return clickUrl;
 
   } catch (error) {
-    res.writeHead(502, {
-      "Content-Type": "application/json; charset=utf-8"
-    });
+    console.log(
+      "Trezor affiliate request failed:",
+      error.message
+    );
 
-    res.end(JSON.stringify({
-      ok: false,
-      networkId,
-      offerId: 235,
-      error: "Trezor API request failed",
-      message: error.message
-    }, null, 2));
+    return null;
   }
 }
 
 
-function page() {
-  const cards = products.map(product => `
-    <article class="card">
+/*
+ * Load all products and attach live affiliate
+ * tracking links where available.
+ */
+async function loadProducts() {
+  const result = [];
 
-      <div class="brand">${product.brand}</div>
+  for (const product of productsData) {
+    let affiliateUrl = null;
 
-      <h2>${product.name}</h2>
+    if (
+      product.brand === "Trezor"
+    ) {
+      affiliateUrl =
+        await generateTrezorTrackingLink(
+          product.slug
+        );
+    }
 
-      <div class="price">${product.price}</div>
+    const offers = (product.offers || [])
+      .filter(
+        offer =>
+          typeof offer.price === "number"
+      )
+      .sort(
+        (a, b) =>
+          a.price - b.price
+      );
 
-      <div class="lowest">
-        Lowest recorded: <strong>${product.lowestPrice}</strong>
-      </div>
+    const bestOffer = offers[0];
 
-      <div class="score-row">
+    const history = (
+      product.priceHistory || []
+    )
+      .filter(
+        entry =>
+          typeof entry.price === "number"
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.date) -
+          new Date(b.date)
+      );
 
-        <div class="score">
+    const currentPrice =
+      bestOffer?.price ?? null;
 
-          <span>Deal Score</span>
+    const lowestPrice =
+      history.length
+        ? Math.min(
+            ...history.map(
+              entry => entry.price
+            )
+          )
+        : currentPrice;
 
+    let dealScore = null;
+    let status = "Tracking started";
+
+    if (
+      currentPrice !== null &&
+      lowestPrice !== null
+    ) {
+      if (
+        currentPrice === lowestPrice
+      ) {
+        dealScore = 100;
+        status =
+          "Best recorded price";
+
+      } else if (
+        lowestPrice > 0
+      ) {
+        const aboveLowest =
+          (
+            (currentPrice -
+              lowestPrice) /
+            lowestPrice
+          ) * 100;
+
+        dealScore = Math.max(
+          0,
+          Math.round(
+            100 -
+              aboveLowest * 2
+          )
+        );
+
+        if (dealScore >= 80) {
+          status = "Good deal";
+        } else if (
+          dealScore >= 50
+        ) {
+          status = "Fair price";
+        } else {
+          status = "Wait";
+        }
+      }
+    }
+
+    const currency =
+      product.currency || "CZK";
+
+    /*
+     * Affiliate URL has priority.
+     *
+     * If the affiliate API is temporarily
+     * unavailable, fall back to the normal
+     * product/offer URL.
+     */
+    const destination =
+      affiliateUrl ||
+      bestOffer?.affiliateUrl ||
+      bestOffer?.url ||
+      product.productUrl ||
+      "#";
+
+    result.push({
+      brand: product.brand,
+      name: product.name,
+      slug: product.slug,
+      price: formatPrice(
+        currentPrice,
+        currency
+      ),
+      lowestPrice: formatPrice(
+        lowestPrice,
+        currency
+      ),
+      dealScore,
+      status,
+      currency,
+      history,
+      url: destination,
+      affiliateActive:
+        Boolean(affiliateUrl)
+    });
+  }
+
+  return result;
+}
+
+
+/* -------------------------------------------------- */
+/* API diagnostics                                    */
+/* -------------------------------------------------- */
+
+async function trezorApiTest(res) {
+  const apiKey =
+    process.env.TREZOR_API_KEY;
+
+  const networkId =
+    process.env.TREZOR_NETWORK_ID ||
+    "trezor";
+
+  if (!apiKey) {
+    res.writeHead(500, {
+      "Content-Type":
+        "application/json; charset=utf-8"
+    });
+
+    res.end(
+      JSON.stringify(
+        {
+          ok: false,
+          error:
+            "TREZOR_API_KEY is not configured"
+        },
+        null,
+        2
+      )
+    );
+
+    return;
+  }
+
+  const params =
+    new URLSearchParams({
+      api_key: apiKey,
+      Target: "Affiliate_Offer",
+      Method:
+        "generateTrackingLink",
+      offer_id: "235"
+    });
+
+  params.append(
+    "params[source]",
+    "walletradar"
+  );
+
+  const apiUrl =
+    `https://${networkId}.api.hasoffers.com/Apiv3/json?${params.toString()}`;
+
+  try {
+    const response =
+      await fetch(apiUrl);
+
+    const data =
+      await response.json();
+
+    res.writeHead(
+      response.ok ? 200 : 502,
+      {
+        "Content-Type":
+          "application/json; charset=utf-8"
+      }
+    );
+
+    /*
+     * Do NOT return the API key.
+     */
+    res.end(
+      JSON.stringify(
+        {
+          ok:
+            response.ok &&
+            data?.response?.status === 1,
+          networkId,
+          offerId: 235,
+          httpStatus:
+            response.status,
+          apiStatus:
+            data?.response?.status ??
+            null,
+          errorMessage:
+            data?.response
+              ?.errorMessage ??
+            null,
+          data:
+            data?.response?.data ??
+            null
+        },
+        null,
+        2
+      )
+    );
+
+  } catch (error) {
+    res.writeHead(502, {
+      "Content-Type":
+        "application/json; charset=utf-8"
+    });
+
+    res.end(
+      JSON.stringify(
+        {
+          ok: false,
+          networkId,
+          offerId: 235,
+          error:
+            "Trezor API request failed",
+          message:
+            error.message
+        },
+        null,
+        2
+      )
+    );
+  }
+}
+
+
+/* -------------------------------------------------- */
+/* HTML                                               */
+/* -------------------------------------------------- */
+
+function page(products) {
+  const cards = products
+    .map(product => `
+      <article class="card">
+
+        <div class="brand">
+          ${product.brand}
+        </div>
+
+        <h2>
+          ${product.name}
+        </h2>
+
+        <div class="price">
+          ${product.price}
+        </div>
+
+        <div class="lowest">
+          Lowest recorded:
           <strong>
-            ${product.dealScore !== null
-              ? product.dealScore + "/100"
-              : "—"}
+            ${product.lowestPrice}
           </strong>
+        </div>
+
+        <div class="score-row">
+
+          <div class="score">
+
+            <span>
+              Deal Score
+            </span>
+
+            <strong>
+              ${
+                product.dealScore !== null
+                  ? product.dealScore + "/100"
+                  : "—"
+              }
+            </strong>
+
+          </div>
+
+          <div class="deal">
+            ✓ ${product.status}
+          </div>
 
         </div>
 
-        <div class="deal">
-          ✓ ${product.status}
+        <div class="history-title">
+          📈 Price history
         </div>
 
-      </div>
+        ${buildPriceChart(
+          product.history,
+          product.currency
+        )}
 
-      <div class="history-title">
-        📈 Price history
-      </div>
+        <a
+          href="${product.url}"
+          target="_blank"
+          rel="noopener sponsored"
+        >
+          View deal →
+        </a>
 
-      ${buildPriceChart(product.history, product.currency)}
+      </article>
+    `)
+    .join("");
 
-      <a href="${product.url}"
-         target="_blank"
-         rel="noopener">
-        View deal →
-      </a>
-
-    </article>
-  `).join("");
-
-  return `<!DOCTYPE html>
+  return `
+<!DOCTYPE html>
 
 <html lang="en">
 
@@ -409,7 +724,10 @@ function page() {
 
 body {
   margin: 0;
-  font-family: Inter, Arial, sans-serif;
+  font-family:
+    Inter,
+    Arial,
+    sans-serif;
   background: #09090b;
   color: #f4f4f5;
 }
@@ -421,7 +739,8 @@ body {
 }
 
 header {
-  border-bottom: 1px solid #27272a;
+  border-bottom:
+    1px solid #27272a;
   padding: 22px 0;
 }
 
@@ -442,7 +761,8 @@ header {
 
 .badge {
   display: inline-block;
-  border: 1px solid #3f3f46;
+  border:
+    1px solid #3f3f46;
   background: #18181b;
   border-radius: 999px;
   padding: 8px 14px;
@@ -452,10 +772,12 @@ header {
 }
 
 h1 {
-  font-size: clamp(42px, 7vw, 76px);
+  font-size:
+    clamp(42px, 7vw, 76px);
   line-height: 0.98;
   letter-spacing: -4px;
-  margin: 0 auto 24px;
+  margin:
+    0 auto 24px;
   max-width: 850px;
 }
 
@@ -478,7 +800,8 @@ h1 {
   flex: 1;
   padding: 17px 20px;
   border-radius: 12px;
-  border: 1px solid #3f3f46;
+  border:
+    1px solid #3f3f46;
   background: #18181b;
   color: white;
   font-size: 16px;
@@ -505,13 +828,15 @@ section {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns:
+    repeat(3, 1fr);
   gap: 20px;
 }
 
 .card {
   background: #18181b;
-  border: 1px solid #27272a;
+  border:
+    1px solid #27272a;
   border-radius: 18px;
   padding: 26px;
 }
@@ -524,7 +849,8 @@ section {
 }
 
 .card h2 {
-  margin: 8px 0 20px;
+  margin:
+    8px 0 20px;
   font-size: 25px;
 }
 
@@ -555,7 +881,8 @@ section {
   padding: 12px 14px;
   border-radius: 12px;
   background: #09090b;
-  border: 1px solid #27272a;
+  border:
+    1px solid #27272a;
   margin-bottom: 12px;
 }
 
@@ -599,7 +926,8 @@ section {
   text-align: center;
   color: #71717a;
   font-size: 13px;
-  border: 1px dashed #3f3f46;
+  border:
+    1px dashed #3f3f46;
   border-radius: 12px;
   margin-bottom: 12px;
 }
@@ -619,7 +947,8 @@ section {
 
 .alert {
   background: #18181b;
-  border: 1px solid #3f3f46;
+  border:
+    1px solid #3f3f46;
   border-radius: 20px;
   padding: 40px;
   text-align: center;
@@ -637,7 +966,8 @@ section {
 }
 
 footer {
-  border-top: 1px solid #27272a;
+  border-top:
+    1px solid #27272a;
   margin-top: 70px;
   padding: 30px 0;
   color: #71717a;
@@ -693,8 +1023,9 @@ footer {
     </h1>
 
     <p>
-      Compare hardware wallet prices, discover good deals
-      and get alerted when your preferred wallet drops
+      Compare hardware wallet prices,
+      discover good deals and get alerted
+      when your preferred wallet drops
       to your target price.
     </p>
 
@@ -735,8 +1066,9 @@ footer {
       </h2>
 
       <p>
-        Set your target price and WalletRadar will notify you
-        when the wallet becomes available at your price.
+        Set your target price and WalletRadar
+        will notify you when the wallet becomes
+        available at your price.
       </p>
 
       <div class="search">
@@ -763,50 +1095,93 @@ footer {
 <footer>
 
   <div class="container">
-    © 2026 WalletRadar · Price information is for demonstration purposes.
+    © 2026 WalletRadar ·
+    Price information is for demonstration purposes.
   </div>
 
 </footer>
 
 </body>
 
-</html>`;
+</html>
+`;
 }
 
 
-const server = http.createServer(async (req, res) => {
+/* -------------------------------------------------- */
+/* Server                                             */
+/* -------------------------------------------------- */
 
-  /*
-   * Temporary Trezor API test endpoint.
-   */
-  if (req.url === "/api/trezor-test") {
-    await trezorApiTest(res);
-    return;
-  }
+const server =
+  http.createServer(
+    async (req, res) => {
 
-  if (req.url === "/" || req.url === "/index.html") {
+      /*
+       * Temporary Trezor API
+       * diagnostic endpoint.
+       */
+      if (
+        req.url ===
+        "/api/trezor-test"
+      ) {
+        await trezorApiTest(res);
+        return;
+      }
 
-    res.writeHead(200, {
-      "Content-Type": "text/html; charset=utf-8"
-    });
+      if (
+        req.url === "/" ||
+        req.url === "/index.html"
+      ) {
 
-    res.end(page());
+        try {
+          const products =
+            await loadProducts();
 
-    return;
-  }
+          res.writeHead(200, {
+            "Content-Type":
+              "text/html; charset=utf-8"
+          });
 
-  res.writeHead(404, {
-    "Content-Type": "text/plain; charset=utf-8"
-  });
+          res.end(
+            page(products)
+          );
 
-  res.end("Not found");
-});
+        } catch (error) {
 
+          console.error(
+            "Page generation error:",
+            error
+          );
 
-server.listen(PORT, "0.0.0.0", () => {
+          res.writeHead(500, {
+            "Content-Type":
+              "text/plain; charset=utf-8"
+          });
 
-  console.log(
-    `WalletRadar running on port ${PORT}`
+          res.end(
+            "WalletRadar error"
+          );
+        }
+
+        return;
+      }
+
+      res.writeHead(404, {
+        "Content-Type":
+          "text/plain; charset=utf-8"
+      });
+
+      res.end("Not found");
+    }
   );
 
-});
+
+server.listen(
+  PORT,
+  "0.0.0.0",
+  () => {
+    console.log(
+      `WalletRadar running on port ${PORT}`
+    );
+  }
+);
