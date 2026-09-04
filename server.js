@@ -252,6 +252,87 @@ const products = productsData.map((product) => {
   };
 });
 
+
+/*
+ * Trezor Affiliate API test
+ *
+ * Uses:
+ *   TREZOR_API_KEY
+ *   TREZOR_NETWORK_ID
+ *
+ * The API key is never hard-coded into the source code.
+ */
+
+async function trezorApiTest(res) {
+  const apiKey = process.env.TREZOR_API_KEY;
+  const networkId = process.env.TREZOR_NETWORK_ID || "trezor";
+
+  if (!apiKey) {
+    res.writeHead(500, {
+      "Content-Type": "application/json; charset=utf-8"
+    });
+
+    res.end(JSON.stringify({
+      ok: false,
+      error: "TREZOR_API_KEY is not configured"
+    }));
+
+    return;
+  }
+
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    Target: "Affiliate_Offer",
+    Method: "findAll",
+    limit: "20"
+  });
+
+  [
+    "id",
+    "name",
+    "currency",
+    "percent_payout",
+    "preview_url",
+    "status"
+  ].forEach((field) => {
+    params.append("fields[]", field);
+  });
+
+  const apiUrl =
+    `https://${networkId}.api.hasoffers.com/Apiv3/json?${params.toString()}`;
+
+  try {
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+
+    res.writeHead(response.ok ? 200 : 502, {
+      "Content-Type": "application/json; charset=utf-8"
+    });
+
+    res.end(JSON.stringify({
+      ok: response.ok && data?.response?.status === 1,
+      networkId,
+      httpStatus: response.status,
+      apiStatus: data?.response?.status ?? null,
+      errorMessage: data?.response?.errorMessage ?? null,
+      offers: data?.response?.data ?? []
+    }, null, 2));
+
+  } catch (error) {
+    res.writeHead(502, {
+      "Content-Type": "application/json; charset=utf-8"
+    });
+
+    res.end(JSON.stringify({
+      ok: false,
+      networkId,
+      error: "Trezor API request failed",
+      message: error.message
+    }, null, 2));
+  }
+}
+
+
 function page() {
   const cards = products.map(product => `
     <article class="card">
@@ -267,18 +348,23 @@ function page() {
       </div>
 
       <div class="score-row">
+
         <div class="score">
+
           <span>Deal Score</span>
+
           <strong>
             ${product.dealScore !== null
               ? product.dealScore + "/100"
               : "—"}
           </strong>
+
         </div>
 
         <div class="deal">
           ✓ ${product.status}
         </div>
+
       </div>
 
       <div class="history-title">
@@ -297,6 +383,7 @@ function page() {
   `).join("");
 
   return `<!DOCTYPE html>
+
 <html lang="en">
 
 <head>
@@ -689,7 +776,16 @@ footer {
 </html>`;
 }
 
-const server = http.createServer((req, res) => {
+
+const server = http.createServer(async (req, res) => {
+
+  /*
+   * Temporary Trezor API test endpoint.
+   */
+  if (req.url === "/api/trezor-test") {
+    await trezorApiTest(res);
+    return;
+  }
 
   if (req.url === "/" || req.url === "/index.html") {
 
@@ -708,6 +804,7 @@ const server = http.createServer((req, res) => {
 
   res.end("Not found");
 });
+
 
 server.listen(PORT, "0.0.0.0", () => {
 
