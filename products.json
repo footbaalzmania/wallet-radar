@@ -4,12 +4,15 @@
     "name": "Safe 3",
     "slug": "trezor-safe-3",
     "currency": "CZK",
+    "productUrl": "https://trezor.io/cs/trezor-safe-3",
     "offers": [
       {
-        "store": "Trezor",
+        "store": "Alza",
         "price": 1499,
+        "currency": "CZK",
         "priceSource": "manual",
-        "url": "https://affil.trezor.io/aff_c?offer_id=239&aff_id=846590&source=walletradar&utm_source=chatgpt.com"
+        "affiliateUrl": null,
+        "url": "https://www.alza.cz/hardware-penezenky-a-trezory/18862141.htm"
       }
     ],
     "priceHistory": [
@@ -18,18 +21,22 @@
         "price": 1499,
         "currency": "CZK"
       }
-    ]
+    ],
+    "lastUpdated": "2026-09-04"
   },
   {
     "brand": "Trezor",
     "name": "Safe 5",
     "slug": "trezor-safe-5",
     "currency": "CZK",
+    "productUrl": "https://trezor.io/cs/trezor-safe-5",
     "offers": [
       {
-        "store": "Trezor",
+        "store": "Alza",
         "price": 3199,
+        "currency": "CZK",
         "priceSource": "manual",
+        "affiliateUrl": null,
         "url": "https://www.alza.cz/hardware-penezenky-a-trezory/18862141.htm"
       }
     ],
@@ -39,18 +46,22 @@
         "price": 3199,
         "currency": "CZK"
       }
-    ]
+    ],
+    "lastUpdated": "2026-09-04"
   },
   {
     "brand": "Ledger",
     "name": "Nano S Plus",
     "slug": "ledger-nano-s-plus",
     "currency": "CZK",
+    "productUrl": "https://shop.ledger.com/products/ledger-nano-s-plus",
     "offers": [
       {
         "store": "Alza",
         "price": 1299,
+        "currency": "CZK",
         "priceSource": "manual",
+        "affiliateUrl": null,
         "url": "https://www.alza.cz/hardware-penezenky-a-trezory/18862141.htm"
       }
     ],
@@ -60,6 +71,7 @@
         "price": 1299,
         "currency": "CZK"
       }
-    ]
+    ],
+    "lastUpdated": "2026-09-04"
   }
 ]
