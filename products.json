@@ -3,6 +3,7 @@
     "brand": "Trezor",
     "name": "Safe 3",
     "slug": "trezor-safe-3",
+    "image": "/images/trezor-safe-3.avif",
     "currency": "CZK",
     "productUrl": "https://trezor.io/cs/trezor-safe-3",
     "offers": [
@@ -28,6 +29,7 @@
     "brand": "Trezor",
     "name": "Safe 5",
     "slug": "trezor-safe-5",
+    "image": "/images/trezor-safe-5.avif",
     "currency": "CZK",
     "productUrl": "https://trezor.io/cs/trezor-safe-5",
     "offers": [
