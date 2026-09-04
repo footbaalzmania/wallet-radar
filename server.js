@@ -15,7 +15,7 @@ const productsData = JSON.parse(
  * through the Trezor/TUNE affiliate account.
  */
 const TREZOR_OFFERS = {
-  "trezor-safe-3": 239,
+  "trezor-safe-3": 169,
   "trezor-safe-5": 235
 };
 
