@@ -6,6 +6,8 @@
     "image": "/trezor-safe-3.avif",
     "currency": "CZK",
     "productUrl": "https://trezor.io/cs/trezor-safe-3",
+    "officialPrice": 1439,
+    "officialPriceCurrency": "CZK",
     "offers": [
       {
         "store": "Alza",
@@ -32,6 +34,8 @@
     "image": "/trezor-safe-5.avif",
     "currency": "CZK",
     "productUrl": "https://trezor.io/cs/trezor-safe-5",
+    "officialPrice": 3149,
+    "officialPriceCurrency": "CZK",
     "offers": [
       {
         "store": "Alza",
@@ -49,6 +53,18 @@
         "currency": "CZK"
       }
     ],
+    "lastUpdated": "2026-09-04"
+  },
+  {
+    "brand": "Trezor",
+    "name": "Safe 7",
+    "slug": "trezor-safe-7",
+    "currency": "CZK",
+    "productUrl": "https://trezor.io/cs/trezor-safe-7",
+    "officialPrice": 6089,
+    "officialPriceCurrency": "CZK",
+    "offers": [],
+    "priceHistory": [],
     "lastUpdated": "2026-09-04"
   },
   {
