@@ -9,6 +9,191 @@ const productsData = JSON.parse(
   fs.readFileSync(path.join(__dirname, "products.json"), "utf8")
 );
 
+function formatPrice(price, currency) {
+  if (price === null || price === undefined) {
+    return "N/A";
+  }
+
+  return new Intl.NumberFormat("cs-CZ", {
+    style: "currency",
+    currency: currency || "CZK"
+  }).format(price);
+}
+
+function buildPriceChart(history, currency) {
+  if (!history || history.length === 0) {
+    return `
+      <div class="chart-empty">
+        Price history will appear here as WalletRadar collects data.
+      </div>
+    `;
+  }
+
+  if (history.length === 1) {
+    const point = history[0];
+
+    return `
+      <div class="chart-wrap">
+        <svg viewBox="0 0 600 180" class="chart" role="img"
+             aria-label="Price history">
+          <line x1="40" y1="140" x2="570" y2="140"
+                stroke="#27272a" stroke-width="1"/>
+          <line x1="40" y1="30" x2="40" y2="140"
+                stroke="#27272a" stroke-width="1"/>
+
+          <circle cx="305" cy="85" r="6"
+                  fill="#a78bfa"/>
+
+          <text x="305" y="60"
+                text-anchor="middle"
+                fill="#f4f4f5"
+                font-size="15"
+                font-weight="700">
+            ${formatPrice(point.price, currency)}
+          </text>
+
+          <text x="305" y="165"
+                text-anchor="middle"
+                fill="#71717a"
+                font-size="12">
+            ${point.date}
+          </text>
+        </svg>
+
+        <div class="chart-note">
+          📊 Tracking started — more price points will appear automatically.
+        </div>
+      </div>
+    `;
+  }
+
+  const prices = history.map(item => item.price);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+
+  const width = 600;
+  const height = 180;
+  const left = 40;
+  const right = 30;
+  const top = 25;
+  const bottom = 40;
+
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+
+  const range = maxPrice - minPrice || 1;
+
+  const points = history.map((item, index) => {
+    const x = left + (index / (history.length - 1)) * chartWidth;
+
+    const y =
+      top +
+      (1 - (item.price - minPrice) / range) * chartHeight;
+
+    return {
+      x,
+      y,
+      price: item.price,
+      date: item.date
+    };
+  });
+
+  const polyline = points
+    .map(point => `${point.x},${point.y}`)
+    .join(" ");
+
+  const circles = points
+    .map(point => `
+      <circle
+        cx="${point.x}"
+        cy="${point.y}"
+        r="4"
+        fill="#a78bfa"
+      />
+    `)
+    .join("");
+
+  const first = points[0];
+  const last = points[points.length - 1];
+
+  return `
+    <div class="chart-wrap">
+      <svg viewBox="0 0 ${width} ${height}"
+           class="chart"
+           role="img"
+           aria-label="Price history">
+
+        <line
+          x1="${left}"
+          y1="${height - bottom}"
+          x2="${width - right}"
+          y2="${height - bottom}"
+          stroke="#27272a"
+          stroke-width="1"
+        />
+
+        <line
+          x1="${left}"
+          y1="${top}"
+          x2="${left}"
+          y2="${height - bottom}"
+          stroke="#27272a"
+          stroke-width="1"
+        />
+
+        <polyline
+          points="${polyline}"
+          fill="none"
+          stroke="#a78bfa"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+
+        ${circles}
+
+        <text
+          x="${left}"
+          y="17"
+          fill="#71717a"
+          font-size="12"
+        >
+          ${formatPrice(maxPrice, currency)}
+        </text>
+
+        <text
+          x="${left}"
+          y="${height - 5}"
+          fill="#71717a"
+          font-size="12"
+        >
+          ${formatPrice(minPrice, currency)}
+        </text>
+
+        <text
+          x="${first.x}"
+          y="${height - 5}"
+          fill="#71717a"
+          font-size="11"
+          text-anchor="start"
+        >
+          ${first.date}
+        </text>
+
+        <text
+          x="${last.x}"
+          y="${height - 5}"
+          fill="#71717a"
+          font-size="11"
+          text-anchor="end"
+        >
+          ${last.date}
+        </text>
+      </svg>
+    </div>
+  `;
+}
+
 const products = productsData.map((product) => {
   const offers = (product.offers || [])
     .filter((offer) => typeof offer.price === "number")
@@ -21,6 +206,7 @@ const products = productsData.map((product) => {
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const currentPrice = bestOffer?.price ?? null;
+
   const lowestPrice = history.length
     ? Math.min(...history.map((entry) => entry.price))
     : currentPrice;
@@ -33,8 +219,13 @@ const products = productsData.map((product) => {
       dealScore = 100;
       status = "Best recorded price";
     } else if (lowestPrice > 0) {
-      const aboveLowest = ((currentPrice - lowestPrice) / lowestPrice) * 100;
-      dealScore = Math.max(0, Math.round(100 - aboveLowest * 2));
+      const aboveLowest =
+        ((currentPrice - lowestPrice) / lowestPrice) * 100;
+
+      dealScore = Math.max(
+        0,
+        Math.round(100 - aboveLowest * 2)
+      );
 
       if (dealScore >= 80) {
         status = "Good deal";
@@ -48,25 +239,15 @@ const products = productsData.map((product) => {
 
   const currency = product.currency || "CZK";
 
-  const formattedPrice = currentPrice !== null
-    ? new Intl.NumberFormat("cs-CZ", {
-        style: "currency",
-        currency
-      }).format(currentPrice)
-    : "N/A";
-
   return {
     brand: product.brand,
     name: product.name,
-    price: formattedPrice,
-    lowestPrice: lowestPrice !== null
-      ? new Intl.NumberFormat("cs-CZ", {
-          style: "currency",
-          currency
-        }).format(lowestPrice)
-      : "N/A",
+    price: formatPrice(currentPrice, currency),
+    lowestPrice: formatPrice(lowestPrice, currency),
     dealScore,
     status,
+    currency,
+    history,
     url: bestOffer?.url || "#"
   };
 });
@@ -74,23 +255,70 @@ const products = productsData.map((product) => {
 function page() {
   const cards = products.map(product => `
     <article class="card">
+
       <div class="brand">${product.brand}</div>
+
       <h2>${product.name}</h2>
+
       <div class="price">${product.price}</div>
-      <div class="deal">✓ ${product.status}</div>
-      <a href="${product.url}" target="_blank" rel="noopener">View deal →</a>
+
+      <div class="lowest">
+        Lowest recorded: <strong>${product.lowestPrice}</strong>
+      </div>
+
+      <div class="score-row">
+        <div class="score">
+          <span>Deal Score</span>
+          <strong>
+            ${product.dealScore !== null
+              ? product.dealScore + "/100"
+              : "—"}
+          </strong>
+        </div>
+
+        <div class="deal">
+          ✓ ${product.status}
+        </div>
+      </div>
+
+      <div class="history-title">
+        📈 Price history
+      </div>
+
+      ${buildPriceChart(product.history, product.currency)}
+
+      <a href="${product.url}"
+         target="_blank"
+         rel="noopener">
+        View deal →
+      </a>
+
     </article>
   `).join("");
 
   return `<!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WalletRadar — Hardware Wallet Price Radar</title>
-<meta name="description" content="Track hardware wallet prices, compare deals and get notified when your preferred wallet reaches your target price.">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+
+<title>
+  WalletRadar — Hardware Wallet Price Radar
+</title>
+
+<meta
+  name="description"
+  content="Track hardware wallet prices, compare deals and get notified when your preferred wallet reaches your target price."
+>
 
 <style>
+
 * {
   box-sizing: border-box;
 }
@@ -219,12 +447,84 @@ section {
 .price {
   font-size: 36px;
   font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.lowest {
+  color: #a1a1aa;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.lowest strong {
+  color: #f4f4f5;
+}
+
+.score-row {
+  margin-bottom: 22px;
+}
+
+.score {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #09090b;
+  border: 1px solid #27272a;
   margin-bottom: 12px;
+}
+
+.score span {
+  color: #a1a1aa;
+  font-size: 13px;
+}
+
+.score strong {
+  color: #c4b5fd;
+  font-size: 18px;
 }
 
 .deal {
   color: #86efac;
-  margin-bottom: 22px;
+  font-size: 14px;
+}
+
+.history-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.chart-wrap {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-empty {
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #71717a;
+  font-size: 13px;
+  border: 1px dashed #3f3f46;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.chart-note {
+  color: #71717a;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 12px;
 }
 
 .card a {
@@ -261,6 +561,7 @@ footer {
 }
 
 @media (max-width: 750px) {
+
   .grid {
     grid-template-columns: 1fr;
   }
@@ -272,84 +573,132 @@ footer {
   h1 {
     letter-spacing: -2px;
   }
+
 }
+
 </style>
+
 </head>
 
 <body>
 
 <header>
+
   <div class="container">
-    <div class="logo">Wallet<span>Radar</span></div>
+
+    <div class="logo">
+      Wallet<span>Radar</span>
+    </div>
+
   </div>
+
 </header>
 
 <main>
 
 <section class="hero">
-  <div class="container">
-    <div class="badge">🔎 Hardware wallet price radar</div>
 
-    <h1>Find the right wallet at the right price.</h1>
+  <div class="container">
+
+    <div class="badge">
+      🔎 Hardware wallet price radar
+    </div>
+
+    <h1>
+      Find the right wallet at the right price.
+    </h1>
 
     <p>
       Compare hardware wallet prices, discover good deals
-      and get alerted when your preferred wallet drops to your target price.
+      and get alerted when your preferred wallet drops
+      to your target price.
     </p>
 
     <div class="search">
+
       <input
         type="text"
         placeholder="Search hardware wallets..."
         aria-label="Search hardware wallets"
       >
-      <button>Search</button>
+
+      <button>
+        Search
+      </button>
+
     </div>
+
   </div>
+
 </section>
 
 <section>
+
   <div class="container">
-    <div class="section-title">🔥 Popular wallets</div>
+
+    <div class="section-title">
+      🔥 Popular wallets
+    </div>
 
     <div class="grid">
       ${cards}
     </div>
 
     <div class="alert">
-      <h2>Never miss a price drop.</h2>
+
+      <h2>
+        Never miss a price drop.
+      </h2>
+
       <p>
         Set your target price and WalletRadar will notify you
         when the wallet becomes available at your price.
       </p>
 
       <div class="search">
-        <input type="email" placeholder="Your email address">
-        <button>Set price alert</button>
+
+        <input
+          type="email"
+          placeholder="Your email address"
+        >
+
+        <button>
+          Set price alert
+        </button>
+
       </div>
+
     </div>
+
   </div>
+
 </section>
 
 </main>
 
 <footer>
+
   <div class="container">
     © 2026 WalletRadar · Price information is for demonstration purposes.
   </div>
+
 </footer>
 
 </body>
+
 </html>`;
 }
 
 const server = http.createServer((req, res) => {
+
   if (req.url === "/" || req.url === "/index.html") {
+
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8"
     });
 
     res.end(page());
+
     return;
   }
 
@@ -361,5 +710,9 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`WalletRadar running on port ${PORT}`);
+
+  console.log(
+    `WalletRadar running on port ${PORT}`
+  );
+
 });
