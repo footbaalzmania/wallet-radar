@@ -6,9 +6,17 @@
     "currency": "CZK",
     "offers": [
       {
-        "store": "Alza",
+        "store": "Trezor",
         "price": 1499,
+        "priceSource": "manual",
         "url": "https://affil.trezor.io/aff_c?offer_id=239&aff_id=846590&source=walletradar&utm_source=chatgpt.com"
+      }
+    ],
+    "priceHistory": [
+      {
+        "date": "2026-09-04",
+        "price": 1499,
+        "currency": "CZK"
       }
     ]
   },
@@ -19,9 +27,17 @@
     "currency": "CZK",
     "offers": [
       {
-        "store": "Alza",
+        "store": "Trezor",
         "price": 3199,
+        "priceSource": "manual",
         "url": "https://www.alza.cz/hardware-penezenky-a-trezory/18862141.htm"
+      }
+    ],
+    "priceHistory": [
+      {
+        "date": "2026-09-04",
+        "price": 3199,
+        "currency": "CZK"
       }
     ]
   },
@@ -34,7 +50,15 @@
       {
         "store": "Alza",
         "price": 1299,
+        "priceSource": "manual",
         "url": "https://www.alza.cz/hardware-penezenky-a-trezory/18862141.htm"
+      }
+    ],
+    "priceHistory": [
+      {
+        "date": "2026-09-04",
+        "price": 1299,
+        "currency": "CZK"
       }
     ]
   }
