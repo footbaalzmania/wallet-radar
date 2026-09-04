@@ -16,13 +16,57 @@ const products = productsData.map((product) => {
 
   const bestOffer = offers[0];
 
+  const history = (product.priceHistory || [])
+    .filter((entry) => typeof entry.price === "number")
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const currentPrice = bestOffer?.price ?? null;
+  const lowestPrice = history.length
+    ? Math.min(...history.map((entry) => entry.price))
+    : currentPrice;
+
+  let dealScore = null;
+  let status = "Tracking started";
+
+  if (currentPrice !== null && lowestPrice !== null) {
+    if (currentPrice === lowestPrice) {
+      dealScore = 100;
+      status = "Best recorded price";
+    } else if (lowestPrice > 0) {
+      const aboveLowest = ((currentPrice - lowestPrice) / lowestPrice) * 100;
+      dealScore = Math.max(0, Math.round(100 - aboveLowest * 2));
+
+      if (dealScore >= 80) {
+        status = "Good deal";
+      } else if (dealScore >= 50) {
+        status = "Fair price";
+      } else {
+        status = "Wait";
+      }
+    }
+  }
+
+  const currency = product.currency || "CZK";
+
+  const formattedPrice = currentPrice !== null
+    ? new Intl.NumberFormat("cs-CZ", {
+        style: "currency",
+        currency
+      }).format(currentPrice)
+    : "N/A";
+
   return {
     brand: product.brand,
     name: product.name,
-    price: bestOffer
-      ? new Intl.NumberFormat("cs-CZ").format(bestOffer.price) + " Kč"
+    price: formattedPrice,
+    lowestPrice: lowestPrice !== null
+      ? new Intl.NumberFormat("cs-CZ", {
+          style: "currency",
+          currency
+        }).format(lowestPrice)
       : "N/A",
-    status: "Good deal",
+    dealScore,
+    status,
     url: bestOffer?.url || "#"
   };
 });
