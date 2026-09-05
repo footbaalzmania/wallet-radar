@@ -2326,28 +2326,56 @@ function renderProduct(product) {
 
         </div>
 
-        ${
-          bestOffer
+                ${
+          TREZOR_OFFERS[product.slug]
             ? `
               <a
                 class="button"
-                href="${escapeHtml(
-                  bestOffer.affiliateUrl ||
-                    bestOffer.url ||
-                    "#"
-                )}"
+                href="/go/${escapeHtml(product.slug)}"
               >
-                Check purchase option
+                Buy at Trezor
               </a>
+
+              ${
+                bestOffer
+                  ? `
+                    <a
+                      class="button secondary"
+                      href="${escapeHtml(
+                        bestOffer.affiliateUrl ||
+                          bestOffer.url ||
+                          "#"
+                      )}"
+                    >
+                      Check ${escapeHtml(
+                        bestOffer.store || "market"
+                      )} price
+                    </a>
+                  `
+                  : ""
+              }
             `
-            : `
-              <div
-                class="button"
-                style="opacity:.55;cursor:not-allowed;"
-              >
-                Purchase option unavailable
-              </div>
-            `
+            : bestOffer
+              ? `
+                <a
+                  class="button"
+                  href="${escapeHtml(
+                    bestOffer.affiliateUrl ||
+                      bestOffer.url ||
+                      "#"
+                  )}"
+                >
+                  Check purchase option
+                </a>
+              `
+              : `
+                <div
+                  class="button"
+                  style="opacity:.55;cursor:not-allowed;"
+                >
+                  Purchase option unavailable
+                </div>
+              `
         }
 
         <a
