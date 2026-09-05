@@ -1,40 +1,26 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-
-const PORT = process.env.PORT || 3000;
-const BASE_URL =
-  process.env.BASE_URL ||
-  "https://serene-transformation-production-ab45.up.railway.app";
-
-const TREZOR_API_KEY = process.env.TREZOR_API_KEY || "";
-const TREZOR_NETWORK_ID = process.env.TREZOR_NETWORK_ID || "trezor";
-
-const productsPath = path.join(__dirname, "products.json");
-
-let products = [];
-
-try {
-  products = JSON.parse(fs.readFileSync(productsPath, "utf8"));
-} catch (err) {
-  console.error("Could not load products.json:", err.message);
-}
-
-/* -------------------------------------------------------
-   HELPERS
-------------------------------------------------------- */
-
-function escapeHtml(value = "") {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function getProduct(slug) {
-  return products.find((product) => product.slug === slug);
+        ${
+          bestOffer
+            ? `
+              <a
+                class="button"
+                href="${escapeHtml(
+                  bestOffer.affiliateUrl ||
+                    bestOffer.url ||
+                    "#"
+                )}"
+              >
+                Check purchase option
+              </a>
+            `
+            : `
+              <div
+                class="button"
+                style="opacity:.55;cursor:not-allowed;"
+              >
+                Purchase option unavailable
+              </div>
+            `
+        }  return products.find((product) => product.slug === slug);
 }
 
 function getBestOffer(product) {
