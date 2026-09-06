@@ -484,7 +484,7 @@ async function generateTrezorTrackingLink(product) {
   }
 
   const url =
-    "https://api.hasoffers.com/Apiv3/json" +
+  "https://${tracking.networkId}.api.hasoffers.com/Apiv3/json" +
     "?NetworkId=" +
     encodeURIComponent(tracking.networkId) +
     "&Target=Affiliate_Offer" +
