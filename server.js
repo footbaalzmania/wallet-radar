@@ -187,6 +187,7 @@ function getDealStatus(product) {
 const TREZOR_OFFERS = {
   "trezor-safe-3": 169,
   "trezor-safe-5": 235,
+  "trezor-safe-7": 352,
 };
 
 async function generateTrezorTrackingLink(offerId, source) {
@@ -1639,11 +1640,17 @@ function renderWalletCard(product) {
 
 function renderHome() {
 
+function renderHome() {
+
+  const visibleProducts = products.filter(
+    (product) => product.brand === "Trezor"
+  );
+
   const tracked =
-    products.length;
+    visibleProducts.length;
 
   const dataPoints =
-    products.reduce(
+    visibleProducts.reduce(
       (sum, product) =>
         sum +
         getPriceHistory(product).length,
@@ -1651,7 +1658,7 @@ function renderHome() {
     );
 
   const purchaseDestinations =
-    products.filter(
+    visibleProducts.filter(
       (product) =>
         Array.isArray(product.offers) &&
         product.offers.some(
@@ -1663,7 +1670,7 @@ function renderHome() {
 
   let bestDeal = null;
 
-  for (const product of products) {
+  for (const product of visibleProducts) {
 
     const score =
       getDealScore(product);
@@ -1841,13 +1848,14 @@ function renderHome() {
       </div>
 
       <div
-        class="wallet-grid"
-        id="walletGrid"
-      >
-        ${products
-          .map(renderWalletCard)
-          .join("")}
-      </div>
+        <div
+  class="wallet-grid"
+  id="walletGrid"
+>
+  ${visibleProducts
+    .map(renderWalletCard)
+    .join("")}
+</div>
 
       <div
         class="no-results"
