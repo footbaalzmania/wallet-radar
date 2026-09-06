@@ -476,6 +476,7 @@ function getTrackingLink(product) {
     apiKey: TREZOR_API_KEY,
   };
 }
+
 async function generateTrezorTrackingLink(product) {
   const tracking = getTrackingLink(product);
 
@@ -484,7 +485,7 @@ async function generateTrezorTrackingLink(product) {
   }
 
   const url =
-  "https://${tracking.networkId}.api.hasoffers.com/Apiv3/json" +
+    `https://${tracking.networkId}.api.hasoffers.com/Apiv3/json` +
     "?NetworkId=" +
     encodeURIComponent(tracking.networkId) +
     "&Target=Affiliate_Offer" +
@@ -517,7 +518,15 @@ async function generateTrezorTrackingLink(product) {
 
     console.error(
       "Trezor tracking link missing:",
-      JSON.stringify(data)
+      JSON.stringify({
+        ...data,
+        request: data?.request
+          ? {
+              ...data.request,
+              api_key: "[redacted]",
+            }
+          : data?.request,
+      })
     );
 
     return null;
@@ -1860,6 +1869,7 @@ function renderHome() {
     `
   );
 }
+
 function renderComparePage() {
   const visibleProducts = products.filter(
     (product) =>
