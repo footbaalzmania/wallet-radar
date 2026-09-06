@@ -491,7 +491,7 @@ async function generateTrezorTrackingLink(product) {
     "&Method=generateTrackingLink" +
     "&api_key=" +
     encodeURIComponent(tracking.apiKey) +
-    "&id=" +
+    "&offer_id=" +
     encodeURIComponent(tracking.offerId);
 
   try {
