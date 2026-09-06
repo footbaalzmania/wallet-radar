@@ -1520,12 +1520,49 @@ function renderWalletCard(product) {
 
       </div>
 
-      <div class="price">
-        ${formatPrice(
-          currentPrice,
-          product.currency
-        )}
-      </div>
+            ${
+        product.officialPrice
+          ? `
+            <div class="price">
+              ${formatPrice(
+                product.officialPrice,
+                product.officialPriceCurrency || product.currency
+              )}
+            </div>
+
+            <div class="source">
+              Official Trezor price
+            </div>
+
+            ${
+              currentPrice !== null &&
+              currentPrice !== product.officialPrice
+                ? `
+                  <div class="source">
+                    Market price:
+                    ${formatPrice(
+                      currentPrice,
+                      product.currency
+                    )}
+                  </div>
+                `
+                : ""
+            }
+          `
+          : `
+            <div class="price">
+              ${formatPrice(
+                currentPrice,
+                product.currency
+              )}
+            </div>
+
+            <div class="source">
+              Source:
+              ${escapeHtml(source)}
+            </div>
+          `
+      }
 
       <div class="source">
         Source:
@@ -1567,13 +1604,31 @@ function renderWalletCard(product) {
 
       </div>
 
+     ${
+  TREZOR_OFFERS[product.slug]
+    ? `
       <a
         class="button"
-        href="/${escapeHtml(product.slug)}"
+        href="/go/${escapeHtml(product.slug)}"
+        style="
+          background:#16a34a;
+          border-color:#16a34a;
+          color:#fff;
+          font-weight:700;
+        "
       >
-        View price & history
+        Buy at Trezor
       </a>
+    `
+    : ""
+}
 
+<a
+  class="button secondary"
+  href="/${escapeHtml(product.slug)}"
+>
+  View price & history
+</a>
     </article>
   `;
 }
