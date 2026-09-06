@@ -43,10 +43,8 @@ global.fetch = async function (...args) {
 };
 
 /*
-  Presentation-only layer for the server-rendered homepage.
-  Important: server.js calls writeHead() before end(), so headersSent
-  is already true when end() receives the HTML. We therefore must not
-  use headersSent as a condition for transforming the response body.
+  Presentation-only layer for the server-rendered HTML.
+  This keeps the fragile server.js untouched while we iterate on UX.
 */
 const originalEnd = http.ServerResponse.prototype.end;
 
@@ -99,7 +97,7 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
     display: none;
   }
 
-  /* Stats sit below the wallet cards, not between hero and products. */
+  /* Stats sit below the wallet cards. */
   .stats {
     padding: 18px 0 20px;
   }
@@ -151,6 +149,73 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
     box-shadow: 0 8px 24px rgba(0,0,0,.07);
   }
 
+  /* Deal Radar card */
+  .deal-radar-panel {
+    margin-top: 18px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #f8fafc;
+  }
+
+  .deal-radar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .deal-radar-title {
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+  }
+
+  .deal-radar-score {
+    font-size: 18px;
+    font-weight: 950;
+  }
+
+  .deal-radar-status {
+    margin-top: 3px;
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .deal-radar-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .deal-radar-metric {
+    padding: 9px 10px;
+    border-radius: 10px;
+    background: #fff;
+    border: 1px solid var(--border);
+  }
+
+  .deal-radar-label {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 750;
+  }
+
+  .deal-radar-value {
+    margin-top: 2px;
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .deal-radar-foot {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
   @media (max-width: 640px) {
     .hero {
       padding: 28px 0 12px;
@@ -173,6 +238,21 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
       const uxScript = `
 <script id="wallet-radar-ux-script">
 (function () {
+  function parsePrice(text) {
+    if (!text) return null;
+    var match = text.replace(/\\s/g, '').match(/([0-9]+(?:[.,][0-9]+)?)/);
+    if (!match) return null;
+    var value = Number(match[1].replace(',', '.'));
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function formatMoney(value) {
+    if (!Number.isFinite(value)) return '—';
+    return new Intl.NumberFormat('cs-CZ', {
+      maximumFractionDigits: 0
+    }).format(value) + ' CZK';
+  }
+
   function applyWalletRadarUX() {
     var stats = document.querySelector('.stats');
     var wallets = document.querySelector('#wallets');
@@ -184,6 +264,73 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
     document.querySelectorAll('a[href^="/go/trezor-"]').forEach(function (link) {
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener noreferrer');
+    });
+
+    document.querySelectorAll('.wallet-card').forEach(function (card) {
+      if (card.querySelector('.deal-radar-panel')) return;
+
+      var priceBlock = card.querySelector('.price-block');
+      var dealRow = card.querySelector('.deal-row');
+      var note = card.querySelector('.note');
+      if (!priceBlock) return;
+
+      var officialEl = card.querySelector('.official-price');
+      var marketEl = card.querySelector('.market-price strong');
+      var scoreEl = card.querySelector('.deal-score');
+      var badgeEl = card.querySelector('.deal-badge');
+
+      var official = parsePrice(officialEl ? officialEl.textContent : '');
+      var market = parsePrice(marketEl ? marketEl.textContent : '');
+      var score = scoreEl ? parsePrice(scoreEl.textContent) : null;
+      var status = badgeEl ? badgeEl.textContent.trim() : 'Building price history';
+
+      var marketDelta = null;
+      if (Number.isFinite(official) && Number.isFinite(market) && official > 0) {
+        marketDelta = ((market - official) / official) * 100;
+      }
+
+      var scoreText = Number.isFinite(score) ? score + '/100' : '—/100';
+      var statusText = status || 'Building price history';
+      var deltaText = Number.isFinite(marketDelta)
+        ? (marketDelta > 0 ? '+' : '') + marketDelta.toFixed(1) + '% vs official'
+        : 'Waiting for market data';
+
+      var panel = document.createElement('div');
+      panel.className = 'deal-radar-panel';
+      panel.innerHTML =
+        '<div class="deal-radar-head">' +
+          '<div>' +
+            '<div class="deal-radar-title">Deal Radar</div>' +
+            '<div class="deal-radar-status">' + statusText + '</div>' +
+          '</div>' +
+          '<div class="deal-radar-score">' + scoreText + '</div>' +
+        '</div>' +
+        '<div class="deal-radar-grid">' +
+          '<div class="deal-radar-metric">' +
+            '<div class="deal-radar-label">Official price</div>' +
+            '<div class="deal-radar-value">' + formatMoney(official) + '</div>' +
+          '</div>' +
+          '<div class="deal-radar-metric">' +
+            '<div class="deal-radar-label">Market price</div>' +
+            '<div class="deal-radar-value">' + formatMoney(market) + '</div>' +
+          '</div>' +
+          '<div class="deal-radar-metric">' +
+            '<div class="deal-radar-label">Price difference</div>' +
+            '<div class="deal-radar-value">' + deltaText + '</div>' +
+          '</div>' +
+          '<div class="deal-radar-metric">' +
+            '<div class="deal-radar-label">Signal</div>' +
+            '<div class="deal-radar-value">' + statusText + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="deal-radar-foot">' +
+          'Deal Score will become more precise as the radar collects real historical prices.' +
+        '</div>';
+
+      priceBlock.insertAdjacentElement('afterend', panel);
+
+      if (dealRow) dealRow.style.display = 'none';
+      if (note) note.style.display = 'none';
     });
   }
 
@@ -204,8 +351,6 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
       }
 
       chunk = Buffer.from(html, encoding || "utf8");
-
-      /* Do not touch headers after writeHead() has already sent them. */
     }
   }
 
