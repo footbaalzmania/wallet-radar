@@ -43,13 +43,15 @@ global.fetch = async function (...args) {
 };
 
 /*
-  Small presentation-only layer for the current server-rendered HTML.
-  This lets us improve UX without touching the large, fragile server.js.
+  Presentation-only layer for the server-rendered homepage.
+  Important: server.js calls writeHead() before end(), so headersSent
+  is already true when end() receives the HTML. We therefore must not
+  use headersSent as a condition for transforming the response body.
 */
 const originalEnd = http.ServerResponse.prototype.end;
 
 http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
-  if (chunk && !this.headersSent) {
+  if (chunk) {
     const contentType = String(this.getHeader("content-type") || "");
     const looksLikeHtml =
       contentType.includes("text/html") ||
@@ -60,7 +62,7 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
         ? chunk.toString(encoding || "utf8")
         : String(chunk);
 
-      /* Keep Trezor affiliate links out of the current tab. */
+      /* Open every Trezor affiliate route in a new tab. */
       html = html.replace(
         /href=(["'])\/go\/[^"']+\1/g,
         '$& target="_blank" rel="noopener noreferrer"'
@@ -175,7 +177,7 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
     var stats = document.querySelector('.stats');
     var wallets = document.querySelector('#wallets');
 
-    if (stats && wallets && stats.previousElementSibling !== wallets) {
+    if (stats && wallets) {
       wallets.parentNode.insertBefore(stats, wallets.nextElementSibling);
     }
 
@@ -203,8 +205,7 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
 
       chunk = Buffer.from(html, encoding || "utf8");
 
-      /* Content-Length, if already present, is now stale after HTML changes. */
-      this.removeHeader("content-length");
+      /* Do not touch headers after writeHead() has already sent them. */
     }
   }
 
