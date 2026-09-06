@@ -1514,13 +1514,17 @@ function renderWalletCard(product) {
 
   const image = product.image
     ? `
-      <div class="wallet-image">
-        <img
-          src="${escapeHtml(product.image)}"
-          alt="${escapeHtml(product.name)}"
-          loading="lazy"
-        >
-      </div>
+    <a
+  href="/go/${escapeHtml(product.slug)}"
+  class="wallet-image"
+  aria-label="Buy ${escapeHtml(product.name)} at Trezor"
+>
+  <img
+    src="${escapeHtml(product.image)}"
+    alt="${escapeHtml(product.name)}"
+    loading="lazy"
+  >
+</a>
     `
     : "";
 
