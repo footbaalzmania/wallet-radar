@@ -59,6 +59,7 @@
     "brand": "Trezor",
     "name": "Safe 7",
     "slug": "trezor-safe-7",
+    "image": "/trezor-safe-7.avif",
     "currency": "CZK",
     "productUrl": "https://trezor.io/cs/trezor-safe-7",
     "officialPrice": 6089,
