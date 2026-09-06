@@ -2745,6 +2745,36 @@ const server = http.createServer(
       const pathname =
         requestUrl.pathname;
 
+      /* -----------------------------------------------
+   STATIC PRODUCT IMAGES
+----------------------------------------------- */
+
+if (
+  pathname === "/trezor-safe-3.avif" ||
+  pathname === "/trezor-safe-5.avif" ||
+  pathname === "/trezor-safe-7.avif"
+) {
+  const filename = pathname.slice(1);
+  const filePath = path.join(__dirname, filename);
+
+  if (!fs.existsSync(filePath)) {
+    res.writeHead(404, {
+      "Content-Type": "text/plain; charset=utf-8",
+    });
+
+    res.end("Image not found");
+    return;
+  }
+
+  res.writeHead(200, {
+    "Content-Type": "image/avif",
+    "Cache-Control": "public, max-age=31536000, immutable",
+  });
+
+  res.end(fs.readFileSync(filePath));
+  return;
+}
+
 
       /* -----------------------------------------------
          SITEMAP
