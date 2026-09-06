@@ -60,13 +60,12 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
         ? chunk.toString(encoding || "utf8")
         : String(chunk);
 
-      /* External affiliate links open separately so the radar stays open. */
+      /* Keep Trezor affiliate links out of the current tab. */
       html = html.replace(
         /href=(["'])\/go\/[^"']+\1/g,
         '$& target="_blank" rel="noopener noreferrer"'
       );
 
-      /* Homepage UX: compact the hero and bring wallet cards forward. */
       const uxCss = `
 <style id="wallet-radar-ux">
   .hero {
@@ -98,8 +97,9 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
     display: none;
   }
 
+  /* Stats sit below the wallet cards, not between hero and products. */
   .stats {
-    padding: 0 0 18px;
+    padding: 18px 0 20px;
   }
 
   .stats-grid {
@@ -125,6 +125,7 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
 
   #wallets.section {
     padding-top: 20px;
+    padding-bottom: 20px;
   }
 
   #wallets .section-header {
@@ -167,8 +168,37 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
   }
 </style>`;
 
+      const uxScript = `
+<script id="wallet-radar-ux-script">
+(function () {
+  function applyWalletRadarUX() {
+    var stats = document.querySelector('.stats');
+    var wallets = document.querySelector('#wallets');
+
+    if (stats && wallets && stats.previousElementSibling !== wallets) {
+      wallets.parentNode.insertBefore(stats, wallets.nextElementSibling);
+    }
+
+    document.querySelectorAll('a[href^="/go/trezor-"]').forEach(function (link) {
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener noreferrer');
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyWalletRadarUX);
+  } else {
+    applyWalletRadarUX();
+  }
+})();
+</script>`;
+
       if (html.includes("</head>")) {
         html = html.replace("</head>", `${uxCss}\n</head>`);
+      }
+
+      if (html.includes("</body>")) {
+        html = html.replace("</body>", `${uxScript}\n</body>`);
       }
 
       chunk = Buffer.from(html, encoding || "utf8");
