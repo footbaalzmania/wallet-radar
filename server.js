@@ -15,14 +15,9 @@ const productsPath = path.join(__dirname, "products.json");
 let products = [];
 
 try {
-  products = JSON.parse(
-    fs.readFileSync(productsPath, "utf8")
-  );
+  products = JSON.parse(fs.readFileSync(productsPath, "utf8"));
 } catch (err) {
-  console.error(
-    "Could not load products.json:",
-    err.message
-  );
+  console.error("Could not load products.json:", err.message);
 }
 
 /* -------------------------------------------------------
@@ -39,9 +34,7 @@ function escapeHtml(value = "") {
 }
 
 function getProduct(slug) {
-  return products.find(
-    (product) => product.slug === slug
-  );
+  return products.find((product) => product.slug === slug);
 }
 
 function getBestOffer(product) {
@@ -49,46 +42,26 @@ function getBestOffer(product) {
     return null;
   }
 
-  const validOffers = product.offers.filter(
-    (offer) => {
-      return Number.isFinite(
-        Number(offer.price)
-      );
-    }
-  );
+  const validOffers = product.offers.filter((offer) => {
+    return Number.isFinite(Number(offer.price));
+  });
 
   if (!validOffers.length) {
     return null;
   }
 
-  return validOffers.reduce(
-    (best, offer) => {
-      return Number(offer.price) <
-        Number(best.price)
-        ? offer
-        : best;
-    }
-  );
+  return validOffers.reduce((best, offer) => {
+    return Number(offer.price) < Number(best.price) ? offer : best;
+  });
 }
 
 function getCurrentPrice(product) {
-  const offer =
-    getBestOffer(product);
-
-  return offer
-    ? Number(offer.price)
-    : null;
+  const offer = getBestOffer(product);
+  return offer ? Number(offer.price) : null;
 }
 
-function formatPrice(
-  price,
-  currency = "CZK"
-) {
-  if (
-    price === null ||
-    price === undefined ||
-    price === ""
-  ) {
+function formatPrice(price, currency = "CZK") {
+  if (price === null || price === undefined || price === "") {
     return "Price unavailable";
   }
 
@@ -98,18 +71,11 @@ function formatPrice(
     return escapeHtml(price);
   }
 
-  return `${number.toLocaleString(
-    "cs-CZ"
-  )} ${escapeHtml(currency)}`;
+  return `${number.toLocaleString("cs-CZ")} ${escapeHtml(currency)}`;
 }
 
 function getPriceHistory(product) {
-  if (
-    !product ||
-    !Array.isArray(
-      product.priceHistory
-    )
-  ) {
+  if (!product || !Array.isArray(product.priceHistory)) {
     return [];
   }
 
@@ -117,10 +83,7 @@ function getPriceHistory(product) {
     .map((item) => ({
       date: item.date,
       price: Number(item.price),
-      currency:
-        item.currency ||
-        product.currency ||
-        "CZK",
+      currency: item.currency || product.currency || "CZK",
     }))
     .filter(
       (item) =>
@@ -131,21 +94,12 @@ function getPriceHistory(product) {
 }
 
 function getLowestPrice(product) {
-  const history =
-    getPriceHistory(product);
+  const history = getPriceHistory(product);
+  const current = getCurrentPrice(product);
 
-  const current =
-    getCurrentPrice(product);
+  const values = history.map((item) => item.price);
 
-  const values =
-    history.map(
-      (item) => item.price
-    );
-
-  if (
-    Number.isFinite(current) &&
-    current > 0
-  ) {
+  if (Number.isFinite(current) && current > 0) {
     values.push(current);
   }
 
@@ -157,21 +111,12 @@ function getLowestPrice(product) {
 }
 
 function getHighestPrice(product) {
-  const history =
-    getPriceHistory(product);
+  const history = getPriceHistory(product);
+  const current = getCurrentPrice(product);
 
-  const current =
-    getCurrentPrice(product);
+  const values = history.map((item) => item.price);
 
-  const values =
-    history.map(
-      (item) => item.price
-    );
-
-  if (
-    Number.isFinite(current) &&
-    current > 0
-  ) {
+  if (Number.isFinite(current) && current > 0) {
     values.push(current);
   }
 
@@ -183,21 +128,12 @@ function getHighestPrice(product) {
 }
 
 function getDealScore(product) {
-  const current =
-    getCurrentPrice(product);
+  const current = getCurrentPrice(product);
+  const history = getPriceHistory(product);
 
-  const history =
-    getPriceHistory(product);
+  const values = history.map((item) => item.price);
 
-  const values =
-    history.map(
-      (item) => item.price
-    );
-
-  if (
-    Number.isFinite(current) &&
-    current > 0
-  ) {
+  if (Number.isFinite(current) && current > 0) {
     values.push(current);
   }
 
@@ -205,41 +141,25 @@ function getDealScore(product) {
     We deliberately do not show a fake score when there is
     not enough historical data.
   */
-
-  if (
-    values.length < 2 ||
-    !Number.isFinite(current)
-  ) {
+  if (values.length < 2 || !Number.isFinite(current)) {
     return null;
   }
 
-  const lowest =
-    Math.min(...values);
-
-  const highest =
-    Math.max(...values);
+  const lowest = Math.min(...values);
+  const highest = Math.max(...values);
 
   if (highest === lowest) {
     return 50;
   }
 
   const score =
-    ((highest - current) /
-      (highest - lowest)) *
-    100;
+    ((highest - current) / (highest - lowest)) * 100;
 
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(score)
-    )
-  );
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 function getDealStatus(product) {
-  const score =
-    getDealScore(product);
+  const score = getDealScore(product);
 
   if (score === null) {
     return "Building price history";
@@ -270,80 +190,34 @@ const TREZOR_OFFERS = {
   "trezor-safe-7": 352,
 };
 
-async function generateTrezorTrackingLink(
-  offerId,
-  source
-) {
+async function generateTrezorTrackingLink(offerId, source) {
   if (!TREZOR_API_KEY) {
-    throw new Error(
-      "TREZOR_API_KEY is not configured"
-    );
+    throw new Error("TREZOR_API_KEY is not configured");
   }
 
-  const url =
-    "https://api.hasoffers.com/Api";
+  const url = "https://api.hasoffers.com/Api";
 
-  const body =
-    new URLSearchParams();
+  const body = new URLSearchParams();
 
-  body.set(
-    "NetworkId",
-    TREZOR_NETWORK_ID
-  );
+  body.set("NetworkId", TREZOR_NETWORK_ID);
+  body.set("Target", "Affiliate_Offer");
+  body.set("Method", "generateTrackingLink");
+  body.set("Format", "json");
+  body.set("Version", "3");
+  body.set("api_key", TREZOR_API_KEY);
+  body.set("offer_id", String(offerId));
+  body.set("source", source || "walletradar");
 
-  body.set(
-    "Target",
-    "Affiliate_Offer"
-  );
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type":
+        "application/x-www-form-urlencoded;charset=UTF-8",
+    },
+    body: body.toString(),
+  });
 
-  body.set(
-    "Method",
-    "generateTrackingLink"
-  );
-
-  body.set(
-    "Format",
-    "json"
-  );
-
-  body.set(
-    "Version",
-    "3"
-  );
-
-  body.set(
-    "api_key",
-    TREZOR_API_KEY
-  );
-
-  body.set(
-    "offer_id",
-    String(offerId)
-  );
-
-  body.set(
-    "source",
-    source || "walletradar"
-  );
-
-  const response =
-    await fetch(
-      url,
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded;charset=UTF-8",
-        },
-
-        body:
-          body.toString(),
-      }
-    );
-
-  const data =
-    await response.json();
+  const data = await response.json();
 
   const clickUrl =
     data &&
@@ -366,21 +240,12 @@ async function generateTrezorTrackingLink(
 ------------------------------------------------------- */
 
 function buildChart(product) {
-  const history =
-    getPriceHistory(product);
+  const history = getPriceHistory(product);
+  const current = getCurrentPrice(product);
 
-  const current =
-    getCurrentPrice(product);
+  const values = history.map((item) => item.price);
 
-  const values =
-    history.map(
-      (item) => item.price
-    );
-
-  if (
-    Number.isFinite(current) &&
-    current > 0
-  ) {
+  if (Number.isFinite(current) && current > 0) {
     values.push(current);
   }
 
@@ -392,40 +257,27 @@ function buildChart(product) {
     `;
   }
 
-  const min =
-    Math.min(...values);
-
-  const max =
-    Math.max(...values);
-
-  const range =
-    max - min || 1;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
 
   return `
     <div
       class="chart"
-      aria-label="${escapeHtml(
-        product.name
-      )} price history"
+      aria-label="${escapeHtml(product.name)} price history"
     >
       ${values
         .slice(-30)
         .map((value) => {
           const height =
-            15 +
-            ((value - min) /
-              range) *
-              85;
+            15 + ((value - min) / range) * 85;
 
           return `
             <div
               class="bar"
               style="height:${height}%"
               title="${escapeHtml(
-                formatPrice(
-                  value,
-                  product.currency
-                )
+                formatPrice(value, product.currency)
               )}"
             ></div>
           `;
@@ -446,16 +298,13 @@ function pageTemplate({
   content,
   productSchema = null,
 }) {
-  const schema =
-    productSchema
-      ? `
-        <script type="application/ld+json">
-          ${JSON.stringify(
-            productSchema
-          )}
-        </script>
-      `
-      : "";
+  const schema = productSchema
+    ? `
+      <script type="application/ld+json">
+        ${JSON.stringify(productSchema)}
+      </script>
+    `
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -468,67 +317,40 @@ function pageTemplate({
     content="width=device-width, initial-scale=1.0"
   >
 
-  <title>${escapeHtml(
-    title
-  )}</title>
+  <title>${escapeHtml(title)}</title>
 
   <meta
     name="description"
-    content="${escapeHtml(
-      description
-    )}"
+    content="${escapeHtml(description)}"
   >
 
   <link
     rel="canonical"
-    href="${escapeHtml(
-      canonical
-    )}"
+    href="${escapeHtml(canonical)}"
   >
 
-  <meta
-    property="og:type"
-    content="website"
-  >
-
+  <meta property="og:type" content="website">
   <meta
     property="og:title"
-    content="${escapeHtml(
-      title
-    )}"
+    content="${escapeHtml(title)}"
   >
-
   <meta
     property="og:description"
-    content="${escapeHtml(
-      description
-    )}"
+    content="${escapeHtml(description)}"
   >
-
   <meta
     property="og:url"
-    content="${escapeHtml(
-      canonical
-    )}"
+    content="${escapeHtml(canonical)}"
   >
 
-  <meta
-    name="twitter:card"
-    content="summary"
-  >
-
+  <meta name="twitter:card" content="summary">
   <meta
     name="twitter:title"
-    content="${escapeHtml(
-      title
-    )}"
+    content="${escapeHtml(title)}"
   >
-
   <meta
     name="twitter:description"
-    content="${escapeHtml(
-      description
-    )}"
+    content="${escapeHtml(description)}"
   >
 
   ${schema}
@@ -890,6 +712,50 @@ function pageTemplate({
       gap: 18px;
     }
 
+    .hero-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 220px;
+      gap: 36px;
+      align-items: end;
+    }
+
+    .hero-main {
+      min-width: 0;
+    }
+
+    .mini-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(255,255,255,.72);
+      box-shadow: var(--shadow);
+    }
+
+    .mini-stat {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: var(--bg);
+    }
+
+    .mini-stat strong {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .mini-stat span {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+      line-height: 1.2;
+    }
+
     .wallet-card {
       background: var(--card);
 
@@ -1031,142 +897,122 @@ function pageTemplate({
       flex-wrap: wrap;
 
       margin-top: 19px;
+            flex-wrap: wrap;
 
-      padding-top: 17px;
+      margin-top: 19px;
+    }
 
-      border-top:
-        1px solid var(--border);
-
+    .wallet-meta-item {
       color: var(--muted);
 
       font-size: 12px;
     }
 
-    /* CHART */
+    .wallet-meta-item strong {
+      color: var(--text);
 
-    .chart {
-      height: 72px;
+      display: block;
 
-      margin-top: 18px;
+      font-size: 13px;
 
-      border-bottom:
-        1px solid var(--border);
+      margin-bottom: 1px;
+    }
 
+    .market-price {
+      margin-top: 7px;
+
+      color: var(--muted);
+
+      font-size: 13px;
+    }
+
+    .market-price strong {
+      color: var(--text);
+    }
+
+    .wallet-actions {
       display: flex;
 
-      align-items: end;
+      gap: 10px;
 
-      gap: 4px;
+      flex-wrap: wrap;
 
-      overflow: hidden;
+      margin-top: 23px;
     }
 
-    .bar {
-      flex: 1;
-
-      min-width: 4px;
-
-      background: #cbd5e1;
-
-      border-radius:
-        4px 4px 0 0;
-    }
-
-    .chart-empty {
-      margin-top: 18px;
-
-      padding: 18px;
-
-      border:
-        1px dashed var(--border);
-
-      border-radius: 12px;
-
-      color: var(--muted);
-
-      font-size: 12px;
-
-      text-align: center;
-    }
-
-    /* BUTTON */
-
-    .button {
+    .btn {
       display: inline-flex;
 
       align-items: center;
       justify-content: center;
 
-      width: 100%;
+      min-height: 44px;
 
-      margin-top: 20px;
+      padding: 0 16px;
 
-      padding: 13px 16px;
+      border-radius: 11px;
 
-      border-radius: 12px;
-
-      background: #111827;
-
-      color: white;
+      font-size: 13px;
 
       font-weight: 750;
 
-      font-size: 14px;
+      border: 1px solid var(--border);
+
+      cursor: pointer;
 
       transition:
         transform .15s ease,
-        opacity .15s ease;
+        background .15s ease,
+        border-color .15s ease;
     }
 
-    .button:hover {
+    .btn:hover {
       transform: translateY(-1px);
-
-      opacity: .92;
     }
 
-    .button.secondary {
+    .btn-primary {
+      background: #111827;
+
+      color: #fff;
+
+      border-color: #111827;
+    }
+
+    .btn-primary:hover {
+      background: #000;
+    }
+
+    .btn-trezor {
+      background: #087f5b;
+
+      color: #fff;
+
+      border-color: #087f5b;
+    }
+
+    .btn-trezor:hover {
+      background: #066b4d;
+
+      border-color: #066b4d;
+    }
+
+    .btn-secondary {
       background: #fff;
 
-      color: #111827;
-
-      border:
-        1px solid var(--border);
+      color: #334155;
     }
 
-    /* ALERT */
-
-    .alert-box {
-      background: var(--card);
-
-      border:
-        1px solid var(--border);
-
-      border-radius: 20px;
-
-      padding: 30px;
-
-      box-shadow: var(--shadow);
-
-      text-align: center;
+    .btn-secondary:hover {
+      background: #f8fafc;
     }
 
-    .alert-box h3 {
-      margin: 0 0 8px;
-
-      font-size: 24px;
+    .btn-full {
+      width: 100%;
     }
 
-    .alert-box p {
-      margin: 0 auto;
+    /* HISTORY */
 
-      max-width: 650px;
-
-      color: var(--muted);
-    }
-
-    /* HOW */
-
-    .how-grid {
+    .history-grid {
       display: grid;
 
       grid-template-columns:
@@ -1175,154 +1021,261 @@ function pageTemplate({
       gap: 14px;
     }
 
-    .how-card {
-      padding: 23px;
-
+    .history-card {
       background: var(--card);
 
       border:
         1px solid var(--border);
 
       border-radius: 18px;
+
+      padding: 22px;
+
+      box-shadow: var(--shadow);
     }
 
-    .how-number {
-      font-size: 12px;
+    .history-card h3 {
+      margin: 0;
+
+      font-size: 18px;
+
+      letter-spacing: -.025em;
+    }
+
+    .history-price {
+      font-size: 27px;
 
       font-weight: 800;
 
-      color: var(--muted);
+      letter-spacing: -.04em;
+
+      margin-top: 10px;
     }
 
-    .how-card h3 {
-      margin: 10px 0 7px;
+    .history-details {
+      display: grid;
 
-      font-size: 18px;
+      grid-template-columns:
+        repeat(2, 1fr);
+
+      gap: 10px;
+
+      margin-top: 17px;
     }
 
-    .how-card p {
-      margin: 0;
+    .history-detail {
+      padding: 11px;
 
+      background: var(--bg);
+
+      border-radius: 11px;
+    }
+
+    .history-detail-label {
       color: var(--muted);
+
+      font-size: 10px;
+
+      text-transform: uppercase;
+
+      font-weight: 750;
+
+      letter-spacing: .05em;
+    }
+
+    .history-detail-value {
+      margin-top: 3px;
+
+      font-weight: 750;
 
       font-size: 14px;
     }
 
-    /* PRODUCT PAGE */
+    /* CHART */
 
-    .breadcrumbs {
-      margin-top: 32px;
+    .chart {
+      height: 120px;
+
+      display: flex;
+
+      align-items: end;
+
+      gap: 3px;
+
+      margin-top: 20px;
+
+      padding:
+        12px 10px 0;
+
+      border-radius: 12px;
+
+      background: var(--bg);
+
+      overflow: hidden;
+    }
+
+    .bar {
+      flex: 1;
+
+      min-width: 2px;
+
+      background: #94a3b8;
+
+      border-radius:
+        3px 3px 0 0;
+    }
+
+    .chart-empty {
+      margin-top: 18px;
+
+      padding: 22px;
+
+      border-radius: 13px;
+
+      background: var(--bg);
 
       color: var(--muted);
 
       font-size: 13px;
+
+      text-align: center;
     }
 
-    .product-page {
-      padding: 55px 0 80px;
-    }
+    /* ALERT */
 
-    .product-hero {
+    .alert-box {
       display: grid;
 
       grid-template-columns:
-        1.15fr .85fr;
+        minmax(0, 1fr)
+        auto;
 
-      gap: 22px;
+      gap: 20px;
 
-      align-items: stretch;
+      align-items: center;
+
+      padding: 26px;
+
+      background: #111827;
+
+      color: #fff;
+
+      border-radius: 20px;
     }
 
-    .product-main,
-    .product-buy {
+    .alert-box h3 {
+      margin: 0;
+
+      font-size: 23px;
+
+      letter-spacing: -.03em;
+    }
+
+    .alert-box p {
+      margin: 7px 0 0;
+
+      color: #cbd5e1;
+
+      font-size: 14px;
+    }
+
+    .alert-form {
+      display: flex;
+
+      gap: 8px;
+
+      min-width: 360px;
+    }
+
+    .alert-form input {
+      min-width: 0;
+      flex: 1;
+
+      border: 1px solid #334155;
+
+      background: #fff;
+
+      color: #111827;
+
+      border-radius: 10px;
+
+      padding: 12px 13px;
+
+      outline: none;
+    }
+
+    .alert-form button {
+      border: 0;
+
+      border-radius: 10px;
+
+      padding: 0 16px;
+
+      background: #fff;
+
+      color: #111827;
+
+      font-weight: 750;
+
+      cursor: pointer;
+    }
+
+    /* HOW IT WORKS */
+
+    .steps {
+      display: grid;
+
+      grid-template-columns:
+        repeat(3, 1fr);
+
+      gap: 14px;
+    }
+
+    .step {
       background: var(--card);
 
       border:
         1px solid var(--border);
 
-      border-radius: 22px;
+      border-radius: 18px;
 
-      padding: 30px;
+      padding: 23px;
 
       box-shadow: var(--shadow);
     }
 
-    .product-image {
-      width: 100%;
-
-      height: 390px;
+    .step-number {
+      width: 34px;
+      height: 34px;
 
       display: flex;
 
       align-items: center;
       justify-content: center;
 
-      background:
-        linear-gradient(
-          180deg,
-          #f8fafc 0%,
-          #eef2f7 100%
-        );
+      border-radius: 10px;
 
-      border-radius: 17px;
+      background: #111827;
 
-      overflow: hidden;
-
-      margin-bottom: 28px;
-    }
-
-    .product-image img {
-      max-width: 90%;
-      max-height: 350px;
-
-      object-fit: contain;
-
-      display: block;
-    }
-
-    .product-main h1 {
-      font-size:
-        clamp(38px, 5vw, 58px);
-
-      margin: 12px 0;
-    }
-
-    .product-description {
-      color: var(--muted);
-
-      font-size: 17px;
-
-      max-width: 650px;
-    }
-
-    .buy-label {
-      color: var(--muted);
-
-      font-size: 12px;
-
-      text-transform: uppercase;
+      color: #fff;
 
       font-weight: 800;
 
-      letter-spacing: .08em;
+      font-size: 13px;
     }
 
-    .buy-price {
-      font-size: 42px;
+    .step h3 {
+      margin: 18px 0 7px;
 
-      font-weight: 850;
-
-      letter-spacing: -.05em;
-
-      margin-top: 8px;
+      font-size: 17px;
     }
 
-    .buy-note {
+    .step p {
+      margin: 0;
+
       color: var(--muted);
 
-      font-size: 12px;
-
-      margin-top: 6px;
+      font-size: 13px;
     }
 
     /* FOOTER */
@@ -1331,6 +1284,8 @@ function pageTemplate({
       border-top:
         1px solid var(--border);
 
+      margin-top: 40px;
+
       padding: 30px 0 45px;
 
       color: var(--muted);
@@ -1338,154 +1293,127 @@ function pageTemplate({
       font-size: 12px;
     }
 
-    footer p {
-      margin: 5px 0;
+    .footer-inner {
+      display: flex;
+
+      align-items: center;
+      justify-content: space-between;
+
+      gap: 20px;
     }
 
-    .no-results {
-      display: none;
+    .footer-links {
+      display: flex;
 
-      color: var(--muted);
+      gap: 18px;
 
-      padding: 20px 0;
+      flex-wrap: wrap;
     }
 
-    /* DARK */
+    /* RESPONSIVE */
 
-    html.dark {
-      color-scheme: dark;
+    @media (max-width: 900px) {
 
-      --bg: #09090b;
-      --card: #111113;
-      --text: #f4f4f5;
-      --muted: #a1a1aa;
-      --border: #27272a;
-      --accent: #f4f4f5;
-      --accent-soft: #18181b;
-      --green: #34d399;
-    }
-
-    html.dark header {
-      background:
-        rgba(9, 9, 11, .88);
-    }
-
-    html.dark .badge,
-    html.dark .search input,
-    html.dark .theme-switcher,
-    html.dark .button.secondary {
-      background: #111113;
-
-      color: var(--text);
-    }
-
-    html.dark .theme-switcher button.active {
-      background: #f4f4f5;
-
-      color: #09090b;
-    }
-
-    html.dark .button {
-      background: #f4f4f5;
-
-      color: #09090b;
-    }
-
-    html.dark .wallet-image,
-    html.dark .product-image {
-      background:
-        linear-gradient(
-          180deg,
-          #18181b 0%,
-          #111113 100%
-        );
-    }
-
-    html.system-dark {
-      color-scheme: dark;
-    }
-
-    @media (prefers-color-scheme: dark) {
-
-      html.system-dark {
-        --bg: #09090b;
-        --card: #111113;
-        --text: #f4f4f5;
-        --muted: #a1a1aa;
-        --border: #27272a;
-        --accent-soft: #18181b;
-        --green: #34d399;
-      }
-
-      html.system-dark header {
-        background:
-          rgba(9, 9, 11, .88);
-      }
-
-      html.system-dark .badge,
-      html.system-dark .search input,
-      html.system-dark .theme-switcher,
-      html.system-dark .button.secondary {
-        background: #111113;
-
-        color: var(--text);
-      }
-
-      html.system-dark .button {
-        background: #f4f4f5;
-
-        color: #09090b;
-      }
-
-      html.system-dark .wallet-image,
-      html.system-dark .product-image {
-        background:
-          linear-gradient(
-            180deg,
-            #18181b 0%,
-            #111113 100%
-          );
-      }
-    }
-
-    /* MOBILE */
-
-    @media (max-width: 800px) {
-
-      nav {
-        display: none;
-      }
-
-      .stats,
-      .intelligence,
-      .wallet-grid,
-      .how-grid,
-      .product-hero {
+      .hero-layout {
         grid-template-columns: 1fr;
       }
 
+      .mini-stats {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+
+      .mini-stat {
+        flex: 1 1 150px;
+      }
+
+      .wallet-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .history-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .steps {
+        grid-template-columns: 1fr;
+      }
+
+      .intelligence {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 680px) {
+
+      .container {
+        width:
+          min(100% - 22px, 1120px);
+      }
+
       .hero {
-        padding-top: 55px;
+        padding: 48px 0 35px;
       }
 
       h1 {
-        font-size: 48px;
+        font-size: 45px;
+      }
+
+      .hero-text {
+        font-size: 17px;
+      }
+
+      nav {
+        gap: 12px;
+      }
+
+      nav a:nth-child(2) {
+        display: none;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .wallet-card {
+        padding: 17px;
       }
 
       .wallet-image {
-        height: 250px;
+        height: 200px;
       }
 
-      .product-image {
-        height: 300px;
+      .wallet-actions {
+        flex-direction: column;
       }
 
-      .product-image img {
-        max-height: 270px;
+      .wallet-actions .btn {
+        width: 100%;
+      }
+
+      .alert-box {
+        grid-template-columns: 1fr;
+      }
+
+      .alert-form {
+        min-width: 0;
+
+        flex-direction: column;
+      }
+
+      .alert-form button {
+        min-height: 44px;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+
+        align-items: flex-start;
       }
     }
 
   </style>
+
 </head>
 
 <body>
@@ -1494,134 +1422,57 @@ function pageTemplate({
 
   <div class="container nav">
 
-    <a href="/" class="brand">
+    <a
+      class="brand"
+      href="/"
+    >
       CryptoWallet<span>Radar</span>
     </a>
 
     <nav>
-      <a href="/">Wallets</a>
+
+      <a href="/">Home</a>
+
       <a href="/compare">Compare</a>
-      <a href="/#history">Price History</a>
-      <a href="/#alerts">Alerts</a>
+
+      <a href="/#history">Price history</a>
+
     </nav>
-
-    <div
-      class="theme-switcher"
-      aria-label="Theme"
-    >
-
-      <button data-theme="light">
-        Light
-      </button>
-
-      <button data-theme="system">
-        System
-      </button>
-
-      <button data-theme="dark">
-        Dark
-      </button>
-
-    </div>
 
   </div>
 
 </header>
 
+<main>
+
 ${content}
+
+</main>
 
 <footer>
 
-  <div class="container">
+  <div class="container footer-inner">
 
-    <p>
-      <strong>CryptoWalletRadar</strong>
-      — hardware wallet price radar.
-    </p>
+    <div>
+      © ${new Date().getFullYear()} CryptoWalletRadar
+    </div>
 
-    <p>
-      Prices are tracked from available retail sources
-      and may differ from affiliate purchase destinations.
-    </p>
+    <div class="footer-links">
 
-    <p>
-      CryptoWalletRadar may earn a commission when you purchase
-      through selected affiliate links.
-      This does not change the price you pay.
-    </p>
+      <a href="/">Home</a>
+
+      <a href="/compare">Compare</a>
+
+      <a href="/sitemap.xml">Sitemap</a>
+
+    </div>
 
   </div>
 
 </footer>
 
-<script>
-
-(function () {
-
-  const root =
-    document.documentElement;
-
-  const buttons =
-    document.querySelectorAll(
-      "[data-theme]"
-    );
-
-  function applyTheme(theme) {
-
-    root.classList.remove(
-      "dark",
-      "system-dark"
-    );
-
-    if (theme === "dark") {
-      root.classList.add("dark");
-    }
-
-    if (theme === "system") {
-      root.classList.add("system-dark");
-    }
-
-    localStorage.setItem(
-      "wallet-radar-theme",
-      theme
-    );
-
-    buttons.forEach((button) => {
-
-      button.classList.toggle(
-        "active",
-        button.dataset.theme === theme
-      );
-
-    });
-
-  }
-
-  const saved =
-    localStorage.getItem(
-      "wallet-radar-theme"
-    ) || "light";
-
-  applyTheme(saved);
-
-  buttons.forEach((button) => {
-
-    button.addEventListener(
-      "click",
-      () => {
-        applyTheme(
-          button.dataset.theme
-        );
-      }
-    );
-
-  });
-
-})();
-
-</script>
-
 </body>
+
 </html>`;
 }
 
@@ -1631,48 +1482,50 @@ ${content}
 
 function renderWalletCard(product) {
 
-  const currentPrice =
-    getCurrentPrice(product);
+  const currentPrice = getCurrentPrice(product);
 
-  const lowest =
-    getLowestPrice(product);
+  const dealScore = getDealScore(product);
 
-  const score =
-    getDealScore(product);
+  const dealStatus = getDealStatus(product);
 
-  const history =
-    getPriceHistory(product);
+  const bestOffer = getBestOffer(product);
 
-  const image =
-    product.image
-      ? `
-        <div class="wallet-image">
+  const officialPrice =
+    product.officialPrice !== undefined
+      ? Number(product.officialPrice)
+      : null;
 
-          <img
-            src="${escapeHtml(
-              product.image
-            )}"
-            alt="${escapeHtml(
-              `${product.brand || ""} ${product.name} hardware wallet`
-            )}"
-            loading="lazy"
-          >
+  const marketPrice =
+    Number.isFinite(currentPrice)
+      ? currentPrice
+      : null;
 
-        </div>
-      `
-      : "";
+  const hasOfficialPrice =
+    Number.isFinite(officialPrice) &&
+    officialPrice > 0;
 
-  const source =
-    getBestOffer(product)?.store ||
-    "Tracked retailer";
+  const showMarketPrice =
+    marketPrice !== null &&
+    (!hasOfficialPrice ||
+      marketPrice !== officialPrice);
+
+  const trezorOfferId =
+    TREZOR_OFFERS[product.slug];
+
+  const image = product.image
+    ? `
+      <div class="wallet-image">
+        <img
+          src="${escapeHtml(product.image)}"
+          alt="${escapeHtml(product.name)}"
+          loading="lazy"
+        >
+      </div>
+    `
+    : "";
 
   return `
-    <article
-      class="wallet-card"
-      data-search="${escapeHtml(
-        `${product.brand || ""} ${product.name} ${product.slug}`
-      ).toLowerCase()}"
-    >
+    <article class="wallet-card">
 
       ${image}
 
@@ -1681,713 +1534,190 @@ function renderWalletCard(product) {
         <div>
 
           <div class="wallet-name">
-            ${escapeHtml(
-              product.brand || ""
-            )}
-            ${escapeHtml(
-              product.name
-            )}
+            ${escapeHtml(product.name)}
           </div>
 
           <div class="wallet-brand">
-            Hardware wallet
+            ${escapeHtml(product.brand || "")}
           </div>
 
         </div>
 
-        <div class="score">
+        ${
+          dealScore !== null
+            ? `
+              <div class="score">
 
-          <div class="score-number">
-            ${
-              score === null
-                ? "—"
-                : score
-            }
-          </div>
+                <div class="score-number">
+                  ${dealScore}
+                </div>
 
-          <div class="score-label">
-            Deal Score
-          </div>
+                <div class="score-label">
+                  Deal Score
+                </div>
 
-        </div>
+              </div>
+            `
+            : ""
+        }
 
       </div>
 
       ${
-        product.officialPrice
+        hasOfficialPrice
           ? `
             <div class="price">
               ${formatPrice(
-                product.officialPrice,
-                product.officialPriceCurrency ||
-                  product.currency
+                officialPrice,
+                product.currency || "CZK"
               )}
             </div>
 
             <div class="source">
               Official Trezor price
             </div>
-
-            ${
-              currentPrice !== null &&
-              currentPrice !==
-                product.officialPrice
-                ? `
-                  <div class="source">
-                    Market price:
-                    ${formatPrice(
-                      currentPrice,
-                      product.currency
-                    )}
-                  </div>
-                `
-                : ""
-            }
           `
           : `
             <div class="price">
-              ${formatPrice(
-                currentPrice,
-                product.currency
-              )}
+              ${
+                marketPrice !== null
+                  ? formatPrice(
+                      marketPrice,
+                      product.currency || "CZK"
+                    )
+                  : "Price unavailable"
+              }
             </div>
 
             <div class="source">
-              Source:
-              ${escapeHtml(
-                source
-              )}
+              Current tracked price
             </div>
           `
       }
 
-      <div class="wallet-status">
-        ${escapeHtml(
-          getDealStatus(product)
-        )}
-      </div>
-
-      ${buildChart(product)}
-
-      <div class="wallet-meta">
-
-        <span>
-          Lowest recorded:
-          <strong>
-            ${
-              lowest === null
-                ? "—"
-                : formatPrice(
-                    lowest,
-                    product.currency
-                  )
-            }
-          </strong>
-        </span>
-
-        <span>
-          ${history.length}
-          price data point${
-            history.length === 1
-              ? ""
-              : "s"
-          }
-        </span>
-
-      </div>
-
       ${
-        TREZOR_OFFERS[
-          product.slug
-        ]
+        showMarketPrice
           ? `
-            <a
-              class="button"
-              href="/go/${escapeHtml(
-                product.slug
-              )}"
-              style="
-                background:#16a34a;
-                border-color:#16a34a;
-                color:#fff;
-                font-weight:700;
-              "
-            >
-              Buy at Trezor
-            </a>
+            <div class="market-price">
+              Market price:
+              <strong>
+                ${formatPrice(
+                  marketPrice,
+                  product.currency || "CZK"
+                )}
+              </strong>
+            </div>
           `
           : ""
       }
 
-      <a
-        class="button secondary"
-        href="/${escapeHtml(
-          product.slug
-        )}"
-      >
-        View price & history
-      </a>
+      <div class="wallet-status">
+        ${escapeHtml(dealStatus)}
+      </div>
 
-    </article>
-  `;
-}
+      <div class="wallet-meta">
 
-/* -------------------------------------------------------
-   HOMEPAGE
-------------------------------------------------------- */
+        ${
+          bestOffer
+            ? `
+              <div class="wallet-meta-item">
+                <strong>
+                  ${escapeHtml(
+                    bestOffer.retailer ||
+                      bestOffer.store ||
+                      "Tracked seller"
+                  )}
+                </strong>
+                Current offer
+              </div>
+            `
+            : ""
+        }
 
-function renderHome() {
-
-  const visibleProducts =
-    products.filter(
-      (product) =>
-        product.brand === "Trezor"
-    );
-
-  const tracked =
-    visibleProducts.length;
-
-  const dataPoints =
-    visibleProducts.reduce(
-      (sum, product) =>
-        sum +
-        getPriceHistory(product).length,
-      0
-    );
-
-  const purchaseDestinations =
-    visibleProducts.filter(
-      (product) =>
-        Array.isArray(
-          product.offers
-        ) &&
-        product.offers.some(
-          (offer) =>
-            offer.url ||
-            offer.affiliateUrl
-        )
-    ).length;
-
-  let bestDeal = null;
-
-  for (
-    const product
-    of visibleProducts
-  ) {
-
-    const score =
-      getDealScore(product);
-
-    if (
-      score !== null &&
-      (
-        !bestDeal ||
-        score >
-          bestDeal.score
-      )
-    ) {
-
-      bestDeal = {
-        product,
-        score,
-      };
-
-    }
-
-  }
-
-  const bestDealHtml =
-    bestDeal
-      ? `
-        <div class="intel-card">
-
-          <div class="intel-label">
-            Best deal right now
-          </div>
-
-          <div class="intel-value">
-            ${escapeHtml(
-              bestDeal.product.brand ||
-                ""
-            )}
-            ${escapeHtml(
-              bestDeal.product.name
-            )}
-            · ${bestDeal.score}/100
-          </div>
-
-        </div>
-      `
-      : `
-        <div class="intel-card">
-
-          <div class="intel-label">
-            Best deal right now
-          </div>
-
-          <div class="intel-value">
-            Building price history
-          </div>
-
-        </div>
-      `;
-
-  const content = `
-<main>
-
-  <section class="hero">
-
-    <div class="container">
-
-      <div class="badge">
-
-        <span class="badge-dot"></span>
-
-        Live hardware wallet price radar
+        ${
+          getLowestPrice(product) !== null
+            ? `
+              <div class="wallet-meta-item">
+                <strong>
+                  ${formatPrice(
+                    getLowestPrice(product),
+                    product.currency || "CZK"
+                  )}
+                </strong>
+                Lowest tracked
+              </div>
+            `
+            : ""
+        }
 
       </div>
 
-      <h1>
-        Find the right wallet
-        at the right price.
-      </h1>
-
-      <p class="hero-text">
-        CryptoWalletRadar tracks hardware wallet prices,
-        price history and deal signals so you can
-        decide what to buy and whether now is the
-        right time to buy it.
-      </p>
-
-      <div class="search">
-
-        <input
-          id="walletSearch"
-          type="search"
-          placeholder="Search Trezor Safe 3, Safe 5, Safe 7..."
-          autocomplete="off"
-        >
-
-      </div>
-
-      <div
-        class="stats"
-        style="
-          grid-template-columns:repeat(3,1fr);
-          gap:10px;
-          margin:18px 0 0;
-        "
-      >
-
-        <div
-          class="stat"
-          style="
-            padding:11px 14px;
-            box-shadow:none;
-            border-radius:12px;
-          "
-        >
-
-          <div
-            class="stat-number"
-            style="font-size:20px;"
-          >
-            ${tracked}
-          </div>
-
-          <div class="stat-label">
-            Wallets tracked
-          </div>
-
-        </div>
-
-        <div
-          class="stat"
-          style="
-            padding:11px 14px;
-            box-shadow:none;
-            border-radius:12px;
-          "
-        >
-
-          <div
-            class="stat-number"
-            style="font-size:20px;"
-          >
-            ${dataPoints}
-          </div>
-
-          <div class="stat-label">
-            Price data points
-          </div>
-
-        </div>
-
-        <div
-          class="stat"
-          style="
-            padding:11px 14px;
-            box-shadow:none;
-            border-radius:12px;
-          "
-        >
-
-          <div
-            class="stat-number"
-            style="font-size:20px;"
-          >
-            ${purchaseDestinations}
-          </div>
-
-          <div class="stat-label">
-            Purchase destinations
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  </section>
-
-  <!-- PRODUCTS FIRST -->
-
-  <section
-    class="section"
-    style="padding-top:10px;"
-  >
-
-    <div class="container">
-
-      <div class="section-header">
-
-        <div>
-
-          <h2>
-            Trezor hardware wallets
-          </h2>
-
-          <p class="section-subtitle">
-            Official Trezor prices, tracked market prices
-            and price history in one place.
-          </p>
-
-        </div>
-
-      </div>
-
-      <div
-        class="wallet-grid"
-        id="walletGrid"
-      >
-
-        ${visibleProducts
-          .map(renderWalletCard)
-          .join("")}
-
-      </div>
-
-      <div
-        class="no-results"
-        id="noResults"
-      >
-        No wallets matched your search.
-      </div>
-
-    </div>
-
-  </section>
-
-  <!-- RADAR INTELLIGENCE -->
-
-  <section
-    class="section"
-    style="padding-top:0;"
-  >
-
-    <div class="container">
-
-      <div class="intelligence">
-
-        ${bestDealHtml}
-
-        <div class="intel-card">
-
-          <div class="intel-label">
-            Radar status
-          </div>
-
-          <div class="intel-value">
-
-            ${
-              dataPoints > 0
-                ? "Price tracking active"
-                : "Data collection starting"
-            }
-
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  </section>
-
-  <section
-    class="section"
-    id="history"
-  >
-
-    <div class="container">
-
-      <div class="section-header">
-
-        <div>
-
-          <h2>
-            Price history
-          </h2>
-
-          <p class="section-subtitle">
-            A current price only tells part
-            of the story.
-          </p>
-
-        </div>
-
-      </div>
-
-      <div class="alert-box">
-
-        <h3>
-          Know whether today's price
-          is actually good.
-        </h3>
-
-        <p>
-          CryptoWalletRadar builds a historical
-          price record for each wallet and
-          turns it into a simple Deal Score.
-          More history means better signals.
-        </p>
-
-      </div>
-
-    </div>
-
-  </section>
-
-  <section
-    class="section"
-    id="alerts"
-  >
-
-    <div class="container">
-
-      <div class="section-header">
-
-        <div>
-
-          <h2>
-            Price alerts
-          </h2>
-
-          <p class="section-subtitle">
-            Get notified when the wallet you
-            want reaches your target price.
-          </p>
-
-        </div>
-
-      </div>
-
-      <div class="alert-box">
-
-        <h3>
-          Price alerts are coming next.
-        </h3>
-
-        <p>
-          Set a target price for a wallet
-          and let CryptoWalletRadar watch the
-          market for you.
-        </p>
+      <div class="wallet-actions">
+
+        ${
+          trezorOfferId
+            ? `
+              <a
+                class="btn btn-trezor"
+                href="/go/${encodeURIComponent(
+                  product.slug
+                )}"
+              >
+                Buy at Trezor
+              </a>
+            `
+            : ""
+        }
 
         <a
-          class="button secondary"
-          href="/#alerts"
+          class="btn ${
+            trezorOfferId
+              ? "btn-secondary"
+              : "btn-primary"
+          }"
+          href="/${encodeURIComponent(
+            product.slug
+          )}"
         >
-          Coming soon
+          View price &amp; history
         </a>
 
       </div>
 
-    </div>
+    </article>
+  `;
+}
+/* -------------------------------------------------------
+   HOME
+------------------------------------------------------- */
 
-  </section>
+function renderHome() {
 
-  <section class="section">
-
-    <div class="container">
-
-      <div class="section-header">
-
-        <div>
-
-          <h2>
-            How CryptoWalletRadar works
-          </h2>
-
-          <p class="section-subtitle">
-            Three simple steps before you buy.
-          </p>
-
-        </div>
-
-      </div>
-
-      <div class="how-grid">
-
-        <div class="how-card">
-
-          <div class="how-number">
-            01
-          </div>
-
-          <h3>
-            Find your wallet
-          </h3>
-
-          <p>
-            Search the hardware wallets
-            you are considering and compare
-            their current prices.
-          </p>
-
-        </div>
-
-        <div class="how-card">
-
-          <div class="how-number">
-            02
-          </div>
-
-          <h3>
-            Check the price signal
-          </h3>
-
-          <p>
-            Use price history and Deal Score
-            to understand whether the current
-            price is attractive.
-          </p>
-
-        </div>
-
-        <div class="how-card">
-
-          <div class="how-number">
-            03
-          </div>
-
-          <h3>
-            Buy with confidence
-          </h3>
-
-          <p>
-            When the price looks right,
-            follow the available purchase
-            destination.
-          </p>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  </section>
-
-</main>
-
-<script>
-
-(function () {
-
-  const input =
-    document.getElementById(
-      "walletSearch"
-    );
-
-  const cards =
-    Array.from(
-      document.querySelectorAll(
-        "#walletGrid .wallet-card"
-      )
-    );
-
-  const noResults =
-    document.getElementById(
-      "noResults"
-    );
-
-  if (!input) {
-    return;
-  }
-
-  input.addEventListener(
-    "input",
-    function () {
-
-      const query =
-        input.value
-          .trim()
-          .toLowerCase();
-
-      let visible = 0;
-
-      cards.forEach(
-        (card) => {
-
-          const text =
-            card.dataset.search ||
-            "";
-
-          const match =
-            !query ||
-            text.includes(query);
-
-          card.style.display =
-            match
-              ? ""
-              : "none";
-
-          if (match) {
-            visible++;
-          }
-
-        }
-      );
-
-      if (noResults) {
-
-        noResults.style.display =
-          visible
-            ? "none"
-            : "block";
-
-      }
-
-    }
+  const trezorProducts = products.filter(
+    (product) =>
+      String(product.brand || "").toLowerCase() ===
+      "trezor"
   );
 
-})();
+  const totalWallets = trezorProducts.length;
 
-</script>
-`;
+  const totalDataPoints = trezorProducts.reduce(
+    (sum, product) =>
+      sum + getPriceHistory(product).length,
+    0
+  );
+
+  const bestDealProduct = trezorProducts
+    .map((product) => ({
+      product,
+      score: getDealScore(product),
+    }))
+    .filter((item) => item.score !== null)
+    .sort((a, b) => b.score - a.score)[0];
+
+  const bestDeal = bestDealProduct
+    ? bestDealProduct.product
+    : null;
 
   return pageTemplate({
 
@@ -2395,14 +1725,593 @@ function renderHome() {
       "CryptoWalletRadar — Trezor Hardware Wallet Price Tracker",
 
     description:
-      "Compare Trezor hardware wallet prices, official Trezor prices, market prices, price history and Deal Score.",
+      "Track Trezor hardware wallet prices, compare current offers, view price history and find out when a hardware wallet is a good deal.",
 
     canonical:
       `${BASE_URL}/`,
 
-    content,
+    content: `
+
+      <section class="hero">
+
+        <div class="container hero-layout">
+
+          <div class="hero-main">
+
+            <div class="badge">
+              <span class="badge-dot"></span>
+              Trezor price radar
+            </div>
+
+            <h1>
+              Know the price.
+              <br>
+              Know when to buy.
+            </h1>
+
+            <p class="hero-text">
+              CryptoWalletRadar tracks Trezor hardware wallet
+              prices and history so you can see what is worth
+              buying now — and what is worth waiting for.
+            </p>
+
+            <div class="search">
+
+              <input
+                id="walletSearch"
+                type="search"
+                placeholder="Search Trezor Safe 3, Safe 5, Safe 7..."
+                autocomplete="off"
+              >
+
+            </div>
+
+          </div>
+
+          <aside class="mini-stats">
+
+            <div class="mini-stat">
+
+              <strong>
+                ${totalWallets}
+              </strong>
+
+              <span>
+                Wallets<br>
+                tracked
+              </span>
+
+            </div>
+
+            <div class="mini-stat">
+
+              <strong>
+                ${totalDataPoints}
+              </strong>
+
+              <span>
+                Price data<br>
+                points
+              </span>
+
+            </div>
+
+            <div class="mini-stat">
+
+              <strong>
+                Trezor
+              </strong>
+
+              <span>
+                Official<br>
+                prices
+              </span>
+
+            </div>
+
+          </aside>
+
+        </div>
+
+      </section>
+
+
+      <!-- TREZOR PRODUCTS -->
+
+      <section class="section">
+
+        <div class="container">
+
+          <div class="section-header">
+
+            <div>
+
+              <h2>
+                Trezor hardware wallets
+              </h2>
+
+              <p class="section-subtitle">
+                Current official prices, market prices and
+                price history.
+              </p>
+
+            </div>
+
+          </div>
+
+          <div
+            class="wallet-grid"
+            id="walletGrid"
+          >
+
+            ${trezorProducts
+              .map(renderWalletCard)
+              .join("")}
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- RADAR INTELLIGENCE -->
+
+      <section class="section">
+
+        <div class="container">
+
+          <div class="section-header">
+
+            <div>
+
+              <h2>
+                Radar intelligence
+              </h2>
+
+              <p class="section-subtitle">
+                A quick view of where the current Trezor
+                prices stand.
+              </p>
+
+            </div>
+
+          </div>
+
+          <div class="intelligence">
+
+            <div class="intel-card">
+
+              <div class="intel-label">
+                Best deal
+              </div>
+
+              <div class="intel-value">
+
+                ${
+                  bestDeal
+                    ? escapeHtml(bestDeal.name)
+                    : "Building price history"
+                }
+
+              </div>
+
+              <p class="section-subtitle">
+
+                ${
+                  bestDeal
+                    ? `${getDealScore(bestDeal)}/100 Deal Score`
+                    : "We need more historical data before calculating a reliable Deal Score."
+                }
+
+              </p>
+
+            </div>
+
+
+            <div class="intel-card">
+
+              <div class="intel-label">
+                Official store
+              </div>
+
+              <div class="intel-value">
+                Trezor
+              </div>
+
+              <p class="section-subtitle">
+                Official Trezor prices are shown directly
+                on the product cards.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- PRICE HISTORY -->
+
+      <section
+        class="section"
+        id="history"
+      >
+
+        <div class="container">
+
+          <div class="section-header">
+
+            <div>
+
+              <h2>
+                Price history
+              </h2>
+
+              <p class="section-subtitle">
+                See how tracked Trezor prices have changed
+                over time.
+              </p>
+
+            </div>
+
+          </div>
+
+          <div class="history-grid">
+
+            ${trezorProducts
+              .map((product) => {
+
+                const current =
+                  getCurrentPrice(product);
+
+                const lowest =
+                  getLowestPrice(product);
+
+                const highest =
+                  getHighestPrice(product);
+
+                return `
+
+                  <article class="history-card">
+
+                    <h3>
+                      ${escapeHtml(product.name)}
+                    </h3>
+
+                    <div class="history-price">
+
+                      ${
+                        Number.isFinite(
+                          current
+                        )
+                          ? formatPrice(
+                              current,
+                              product.currency ||
+                                "CZK"
+                            )
+                          : "Price unavailable"
+                      }
+
+                    </div>
+
+                    <div class="history-details">
+
+                      <div class="history-detail">
+
+                        <div class="history-detail-label">
+                          Lowest
+                        </div>
+
+                        <div class="history-detail-value">
+
+                          ${
+                            lowest !== null
+                              ? formatPrice(
+                                  lowest,
+                                  product.currency ||
+                                    "CZK"
+                                )
+                              : "—"
+                          }
+
+                        </div>
+
+                      </div>
+
+                      <div class="history-detail">
+
+                        <div class="history-detail-label">
+                          Highest
+                        </div>
+
+                        <div class="history-detail-value">
+
+                          ${
+                            highest !== null
+                              ? formatPrice(
+                                  highest,
+                                  product.currency ||
+                                    "CZK"
+                                )
+                              : "—"
+                          }
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                    ${buildChart(product)}
+
+                  </article>
+
+                `;
+
+              })
+              .join("")}
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ALERTS -->
+
+      <section class="section">
+
+        <div class="container">
+
+          <div class="alert-box">
+
+            <div>
+
+              <h3>
+                Waiting for a better price?
+              </h3>
+
+              <p>
+                Price alerts are coming soon.
+                Tell us what price would make you buy.
+              </p>
+
+            </div>
+
+            <form
+              class="alert-form"
+              onsubmit="return false;"
+            >
+
+              <input
+                type="email"
+                placeholder="Your email"
+                aria-label="Email address"
+              >
+
+              <button type="submit">
+                Coming soon
+              </button>
+
+            </form>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- HOW IT WORKS -->
+
+      <section class="section">
+
+        <div class="container">
+
+          <div class="section-header">
+
+            <div>
+
+              <h2>
+                How CryptoWalletRadar works
+              </h2>
+
+              <p class="section-subtitle">
+                Simple information before you spend your money.
+              </p>
+
+            </div>
+
+          </div>
+
+          <div class="steps">
+
+            <article class="step">
+
+              <div class="step-number">
+                1
+              </div>
+
+              <h3>
+                Check the current price
+              </h3>
+
+              <p>
+                See the official Trezor price together with
+                tracked market offers where available.
+              </p>
+
+            </article>
+
+
+            <article class="step">
+
+              <div class="step-number">
+                2
+              </div>
+
+              <h3>
+                Check the history
+              </h3>
+
+              <p>
+                Compare today's price with the prices we have
+                collected over time.
+              </p>
+
+            </article>
+
+
+            <article class="step">
+
+              <div class="step-number">
+                3
+              </div>
+
+              <h3>
+                Decide when to buy
+              </h3>
+
+              <p>
+                Use the radar and Deal Score to decide whether
+                the current price looks attractive.
+              </p>
+
+            </article>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <script>
+
+        const searchInput =
+          document.getElementById("walletSearch");
+
+        const walletGrid =
+          document.getElementById("walletGrid");
+
+        if (searchInput && walletGrid) {
+
+          searchInput.addEventListener(
+            "input",
+            function () {
+
+              const query =
+                this.value
+                  .trim()
+                  .toLowerCase();
+
+              const cards =
+                walletGrid.querySelectorAll(
+                  ".wallet-card"
+                );
+
+              cards.forEach((card) => {
+
+                const text =
+                  card.textContent
+                    .toLowerCase();
+
+                card.style.display =
+                  !query ||
+                  text.includes(query)
+                    ? ""
+                    : "none";
+
+              });
+
+            }
+          );
+
+        }
+
+      </script>
+
+    `,
+
   });
+
 }
+
+
+/* -------------------------------------------------------
+   COMPARE
+------------------------------------------------------- */
+
+function renderCompare() {
+
+  const trezorProducts =
+    products.filter(
+      (product) =>
+        String(product.brand || "").toLowerCase() ===
+        "trezor"
+    );
+
+  return pageTemplate({
+
+    title:
+      "Compare Trezor Hardware Wallets — CryptoWalletRadar",
+
+    description:
+      "Compare Trezor Safe 3, Safe 5 and Safe 7 prices, current offers and price history.",
+
+    canonical:
+      `${BASE_URL}/compare`,
+
+    content: `
+
+      <section class="hero">
+
+        <div class="container">
+
+          <div class="badge">
+            Trezor comparison
+          </div>
+
+          <h1>
+            Compare Trezor wallets.
+          </h1>
+
+          <p class="hero-text">
+            Compare current official Trezor prices and
+            tracked market prices in one place.
+          </p>
+
+        </div>
+
+      </section>
+
+
+      <section class="section">
+
+        <div class="container">
+
+          <div class="wallet-grid">
+
+            ${trezorProducts
+              .map(renderWalletCard)
+              .join("")}
+
+          </div>
+
+        </div>
+
+      </section>
+
+    `,
+
+  });
+
+}
+
 
 /* -------------------------------------------------------
    PRODUCT PAGE
@@ -2413,76 +2322,27 @@ function renderProduct(product) {
   const currentPrice =
     getCurrentPrice(product);
 
-  const lowest =
+  const lowestPrice =
     getLowestPrice(product);
 
-  const highest =
+  const highestPrice =
     getHighestPrice(product);
 
-  const score =
+  const dealScore =
     getDealScore(product);
 
-  const history =
-    getPriceHistory(product);
+  const trezorOfferId =
+    TREZOR_OFFERS[product.slug];
 
-  const bestOffer =
-    getBestOffer(product);
-
-  const image =
-    product.image
-      ? `
-        <div class="product-image">
-
-          <img
-            src="${escapeHtml(
-              product.image
-            )}"
-            alt="${escapeHtml(
-              `${product.brand || ""} ${product.name} hardware wallet`
-            )}"
-            fetchpriority="high"
-          >
-
-        </div>
-      `
-      : "";
-
-  const historyRows =
-    history
-      .slice()
-      .reverse()
-      .slice(0, 30)
-      .map(
-        (item) => `
-          <div
-            style="
-              display:flex;
-              justify-content:space-between;
-              padding:10px 0;
-              border-bottom:1px solid var(--border);
-              font-size:13px;
-            "
-          >
-
-            <span>
-              ${escapeHtml(
-                item.date
-              )}
-            </span>
-
-            <strong>
-              ${formatPrice(
-                item.price,
-                item.currency
-              )}
-            </strong>
-
-          </div>
-        `
-      )
-      .join("");
+  const officialPrice =
+    Number.isFinite(
+      Number(product.officialPrice)
+    )
+      ? Number(product.officialPrice)
+      : null;
 
   const productSchema = {
+
     "@context":
       "https://schema.org",
 
@@ -2490,503 +2350,260 @@ function renderProduct(product) {
       "Product",
 
     name:
-      `${product.brand || ""} ${product.name}`.trim(),
-
-    description:
-      product.description ||
-      `Current price and price history for ${product.brand || ""} ${product.name}.`,
-
-    image:
-      product.image
-        ? [
-            `${BASE_URL}${product.image}`
-          ]
-        : undefined,
+      product.name,
 
     brand: {
       "@type":
         "Brand",
 
       name:
-        product.brand ||
-        "Hardware Wallet",
+        product.brand || "Trezor",
     },
 
-    offers:
-      Number.isFinite(
-        currentPrice
-      )
-        ? {
-            "@type":
-              "Offer",
+    offers: {
 
-            priceCurrency:
-              product.currency ||
-              "CZK",
+      "@type":
+        "Offer",
 
-            price:
-              currentPrice,
+      price:
+        officialPrice !== null
+          ? officialPrice
+          : currentPrice,
 
-            availability:
-              "https://schema.org/InStock",
+      priceCurrency:
+        product.currency || "CZK",
 
-            url:
-              `${BASE_URL}/${product.slug}`,
-          }
-        : undefined,
+      availability:
+        "https://schema.org/InStock",
+
+      url:
+        `${BASE_URL}/${product.slug}`,
+
+    },
+
   };
 
-  const content = `
-<main class="product-page">
+  const image =
+    product.image
+      ? `
+        <div class="wallet-image">
 
-  <div class="container">
-
-    <div class="breadcrumbs">
-
-      <a href="/">
-        CryptoWalletRadar
-      </a>
-
-      &nbsp; / &nbsp;
-
-      ${escapeHtml(
-        product.brand ||
-          "Wallet"
-      )}
-
-      &nbsp; / &nbsp;
-
-      ${escapeHtml(
-        product.name
-      )}
-
-    </div>
-
-    <div
-      class="product-hero"
-      style="margin-top:20px;"
-    >
-
-      <section class="product-main">
-
-        ${image}
-
-        <div class="badge">
-
-          <span class="badge-dot"></span>
-
-          Price radar
+          <img
+            src="${escapeHtml(product.image)}"
+            alt="${escapeHtml(product.name)}"
+          >
 
         </div>
-
-        <h1>
-
-          ${escapeHtml(
-            product.brand || ""
-          )}
-
-          ${escapeHtml(
-            product.name
-          )}
-
-        </h1>
-
-        <p class="product-description">
-
-          ${
-            escapeHtml(
-              product.description ||
-                ""
-            ) ||
-            `Track the current price and historical price movement for ${escapeHtml(
-              product.brand || ""
-            )} ${escapeHtml(
-              product.name
-            )}.`
-          }
-
-        </p>
-
-        <div class="wallet-meta">
-
-          <span>
-            Lowest recorded:
-            <strong>
-
-              ${
-                lowest === null
-                  ? "—"
-                  : formatPrice(
-                      lowest,
-                      product.currency
-                    )
-              }
-
-            </strong>
-          </span>
-
-          <span>
-            Highest recorded:
-            <strong>
-
-              ${
-                highest === null
-                  ? "—"
-                  : formatPrice(
-                      highest,
-                      product.currency
-                    )
-              }
-
-            </strong>
-          </span>
-
-          <span>
-            Deal Score:
-            <strong>
-
-              ${
-                score === null
-                  ? "—"
-                  : `${score}/100`
-              }
-
-            </strong>
-          </span>
-
-        </div>
-
-        ${buildChart(product)}
-
-      </section>
-
-      <aside class="product-buy">
-
-        <div class="buy-label">
-          Official Trezor price
-        </div>
-
-        <div class="buy-price">
-
-          ${
-            product.officialPrice
-              ? formatPrice(
-                  product.officialPrice,
-                  product.officialPriceCurrency ||
-                    product.currency
-                )
-              : formatPrice(
-                  currentPrice,
-                  product.currency
-                )
-          }
-
-        </div>
-
-        <div class="buy-note">
-
-          ${
-            product.officialPrice &&
-            currentPrice !== null &&
-            currentPrice !==
-              product.officialPrice
-              ? `Market price: ${formatPrice(
-                  currentPrice,
-                  product.currency
-                )}`
-              : bestOffer
-                ? `Best tracked offer: ${escapeHtml(
-                    bestOffer.store ||
-                      "Retailer"
-                  )}`
-                : "No retail offer available."
-          }
-
-        </div>
-
-        ${
-          TREZOR_OFFERS[
-            product.slug
-          ]
-            ? `
-              <a
-                class="button"
-                href="/go/${escapeHtml(
-                  product.slug
-                )}"
-                style="
-                  background:#16a34a;
-                  border-color:#16a34a;
-                  color:#fff;
-                  font-weight:700;
-                "
-              >
-                Buy at Trezor
-              </a>
-
-              ${
-                bestOffer
-                  ? `
-                    <a
-                      class="button secondary"
-                      href="${escapeHtml(
-                        bestOffer.affiliateUrl ||
-                          bestOffer.url ||
-                          "#"
-                      )}"
-                    >
-                      Check ${escapeHtml(
-                        bestOffer.store ||
-                          "market"
-                      )} price
-                    </a>
-                  `
-                  : ""
-              }
-
-            `
-            : bestOffer
-              ? `
-                <a
-                  class="button"
-                  href="${escapeHtml(
-                    bestOffer.affiliateUrl ||
-                      bestOffer.url ||
-                      "#"
-                  )}"
-                >
-                  Check purchase option
-                </a>
-              `
-              : `
-                <div
-                  class="button"
-                  style="
-                    opacity:.55;
-                    cursor:not-allowed;
-                  "
-                >
-                  Purchase option unavailable
-                </div>
-              `
-        }
-
-        <a
-          class="button secondary"
-          href="/"
-        >
-          Back to all wallets
-        </a>
-
-      </aside>
-
-    </div>
-
-    <section
-      class="section"
-      style="padding-bottom:20px;"
-    >
-
-      <div class="section-header">
-
-        <div>
-
-          <h2>
-            Price history
-          </h2>
-
-          <p class="section-subtitle">
-            Historical observations collected
-            by CryptoWalletRadar.
-          </p>
-
-        </div>
-
-      </div>
-
-      <div class="product-main">
-
-        ${
-          historyRows ||
-          `
-            <p class="section-subtitle">
-              Price history is still being built.
-            </p>
-          `
-        }
-
-      </div>
-
-    </section>
-
-  </div>
-
-</main>
-`;
+      `
+      : "";
 
   return pageTemplate({
 
     title:
-      `${product.brand || ""} ${product.name} Price & Price History | CryptoWalletRadar`,
+      `${product.name} Price & History — CryptoWalletRadar`,
 
     description:
-      `Check the current ${product.brand || ""} ${product.name} price, historical prices and Deal Score. See whether ${product.name} is a good buy today.`,
+      `Track the current price and price history of ${product.name}. Compare official Trezor pricing with tracked market offers.`,
 
     canonical:
       `${BASE_URL}/${product.slug}`,
 
-    content,
-
     productSchema,
-  });
-}
 
-/* -------------------------------------------------------
-   COMPARE
-------------------------------------------------------- */
+    content: `
 
-function renderCompare() {
+      <section class="hero">
 
-  const visibleProducts =
-    products.filter(
-      (product) =>
-        product.brand === "Trezor"
-    );
+        <div class="container">
 
-  const rows =
-    visibleProducts
-      .map(
-        (product) => {
+          <div class="badge">
+            ${escapeHtml(
+              product.brand || "Hardware wallet"
+            )}
+          </div>
 
-          const currentPrice =
-            getCurrentPrice(product);
+          <h1>
+            ${escapeHtml(product.name)}
+          </h1>
 
-          const officialPrice =
-            Number.isFinite(
-              Number(
-                product.officialPrice
-              )
-            )
-              ? Number(
-                  product.officialPrice
-                )
-              : null;
+          <p class="hero-text">
+            Track the current price, historical range and
+            Deal Score for this hardware wallet.
+          </p>
 
-          const score =
-            getDealScore(product);
+        </div>
 
-          return `
-            <article class="wallet-card">
+      </section>
+
+
+      <section class="section">
+
+        <div class="container">
+
+          <article class="wallet-card">
+
+            ${image}
+
+            <div class="wallet-top">
+
+              <div>
+
+                <div class="wallet-name">
+                  ${escapeHtml(product.name)}
+                </div>
+
+                <div class="wallet-brand">
+                  ${escapeHtml(
+                    product.brand || ""
+                  )}
+                </div>
+
+              </div>
 
               ${
-                product.image
+                dealScore !== null
                   ? `
-                    <div class="wallet-image">
+                    <div class="score">
 
-                      <img
-                        src="${escapeHtml(
-                          product.image
-                        )}"
-                        alt="${escapeHtml(
-                          `${product.brand || ""} ${product.name} hardware wallet`
-                        )}"
-                        loading="lazy"
-                      >
+                      <div class="score-number">
+                        ${dealScore}
+                      </div>
+
+                      <div class="score-label">
+                        Deal Score
+                      </div>
 
                     </div>
                   `
                   : ""
               }
 
-              <div class="wallet-name">
+            </div>
 
-                ${escapeHtml(
-                  product.brand ||
-                    ""
-                )}
 
-                ${escapeHtml(
-                  product.name
-                )}
+            <div class="price">
 
-              </div>
-
-              <div class="wallet-brand">
-                Hardware wallet
-              </div>
-
-              <div class="price">
-
-                ${
-                  officialPrice !==
-                  null
+              ${
+                officialPrice !== null
+                  ? formatPrice(
+                      officialPrice,
+                      product.currency ||
+                        "CZK"
+                    )
+                  : currentPrice !== null
                     ? formatPrice(
-                        officialPrice,
-                        product.officialPriceCurrency ||
-                          product.currency
-                      )
-                    : formatPrice(
                         currentPrice,
-                        product.currency
+                        product.currency ||
+                          "CZK"
                       )
-                }
-
-              </div>
-
-              ${
-                officialPrice !==
-                null
-                  ? `
-                    <div class="source">
-                      Official Trezor price
-                    </div>
-                  `
-                  : ""
+                    : "Price unavailable"
               }
 
+            </div>
+
+            <div class="source">
+
               ${
-                currentPrice !== null &&
-                officialPrice !== null &&
-                currentPrice !==
-                  officialPrice
-                  ? `
-                    <div class="source">
-                      Market price:
+                officialPrice !== null
+                  ? "Official Trezor price"
+                  : "Current tracked price"
+              }
+
+            </div>
+
+
+            ${
+              officialPrice !== null &&
+              currentPrice !== null &&
+              officialPrice !== currentPrice
+                ? `
+                  <div class="market-price">
+
+                    Market price:
+                    <strong>
                       ${formatPrice(
                         currentPrice,
-                        product.currency
+                        product.currency ||
+                          "CZK"
                       )}
-                    </div>
-                  `
-                  : ""
-              }
+                    </strong>
 
-              <div class="wallet-status">
+                  </div>
+                `
+                : ""
+            }
 
-                ${
-                  score === null
-                    ? "Building price history"
-                    : `Deal Score ${score}/100`
-                }
+
+            <div class="wallet-status">
+              ${escapeHtml(
+                getDealStatus(product)
+              )}
+            </div>
+
+
+            <div class="history-details">
+
+              <div class="history-detail">
+
+                <div class="history-detail-label">
+                  Lowest tracked
+                </div>
+
+                <div class="history-detail-value">
+
+                  ${
+                    lowestPrice !== null
+                      ? formatPrice(
+                          lowestPrice,
+                          product.currency ||
+                            "CZK"
+                        )
+                      : "—"
+                  }
+
+                </div>
 
               </div>
 
+
+              <div class="history-detail">
+
+                <div class="history-detail-label">
+                  Highest tracked
+                </div>
+
+                <div class="history-detail-value">
+
+                  ${
+                    highestPrice !== null
+                      ? formatPrice(
+                          highestPrice,
+                          product.currency ||
+                            "CZK"
+                        )
+                      : "—"
+                  }
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            ${buildChart(product)}
+
+
+            <div class="wallet-actions">
+
               ${
-                TREZOR_OFFERS[
-                  product.slug
-                ]
+                trezorOfferId
                   ? `
                     <a
-                      class="button"
-                      href="/go/${escapeHtml(
+                      class="btn btn-trezor"
+                      href="/go/${encodeURIComponent(
                         product.slug
                       )}"
-                      style="
-                        background:#16a34a;
-                        border-color:#16a34a;
-                        color:#fff;
-                        font-weight:700;
-                      "
                     >
                       Buy at Trezor
                     </a>
@@ -2994,231 +2611,103 @@ function renderCompare() {
                   : ""
               }
 
-              <a
-                class="button secondary"
-                href="/${escapeHtml(
-                  product.slug
-                )}"
-              >
-                View wallet
-              </a>
+            </div>
 
-            </article>
-          `;
+          </article>
 
-        }
-      )
-      .join("");
+        </div>
 
-  const content = `
-<main class="product-page">
+      </section>
 
-  <div class="container">
+    `,
 
-    <div class="breadcrumbs">
+  });
 
-      <a href="/">
-        CryptoWalletRadar
-      </a>
+}
+/* -------------------------------------------------------
+   404
+------------------------------------------------------- */
 
-      / Compare
-
-    </div>
-
-    <section
-      style="
-        padding:35px 0 35px;
-      "
-    >
-
-      <h1
-        style="
-          font-size:clamp(42px,6vw,68px);
-        "
-      >
-        Trezor Hardware Wallet Comparison
-      </h1>
-
-      <p class="hero-text">
-        Compare official Trezor prices,
-        tracked market prices, price history
-        and Deal Scores in one place.
-      </p>
-
-    </section>
-
-    <div class="wallet-grid">
-
-      ${rows}
-
-    </div>
-
-  </div>
-
-</main>
-`;
+function render404() {
 
   return pageTemplate({
 
     title:
-      "Trezor Hardware Wallet Comparison | CryptoWalletRadar",
+      "Page not found — CryptoWalletRadar",
 
     description:
-      "Compare Trezor hardware wallets by official price, market price, price history and Deal Score.",
+      "The requested CryptoWalletRadar page could not be found.",
 
     canonical:
-      `${BASE_URL}/compare`,
+      `${BASE_URL}/404`,
 
-    content,
+    content: `
+
+      <section class="hero">
+
+        <div class="container">
+
+          <div class="badge">
+            404
+          </div>
+
+          <h1>
+            Page not found.
+          </h1>
+
+          <p class="hero-text">
+            The page you are looking for does not exist
+            or may have moved.
+          </p>
+
+          <div class="wallet-actions">
+
+            <a
+              class="btn btn-primary"
+              href="/"
+            >
+              Back to CryptoWalletRadar
+            </a>
+
+          </div>
+
+        </div>
+
+      </section>
+
+    `,
+
   });
+
 }
+
 
 /* -------------------------------------------------------
-   TREZOR API TEST
+   SITEMAP
 ------------------------------------------------------- */
-
-async function trezorApiRequest(
-  method,
-  params
-) {
-
-  if (!TREZOR_API_KEY) {
-    throw new Error(
-      "TREZOR_API_KEY is not configured"
-    );
-  }
-
-  const url =
-    "https://api.hasoffers.com/Api";
-
-  const body =
-    new URLSearchParams();
-
-  body.set(
-    "NetworkId",
-    TREZOR_NETWORK_ID
-  );
-
-  body.set(
-    "Target",
-    "Affiliate_Offer"
-  );
-
-  body.set(
-    "Method",
-    method
-  );
-
-  body.set(
-    "Format",
-    "json"
-  );
-
-  body.set(
-    "Version",
-    "3"
-  );
-
-  body.set(
-    "api_key",
-    TREZOR_API_KEY
-  );
-
-  for (
-    const [key, value]
-    of Object.entries(
-      params || {}
-    )
-  ) {
-
-    body.set(
-      key,
-      String(value)
-    );
-
-  }
-
-  const response =
-    await fetch(
-      url,
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded;charset=UTF-8",
-        },
-
-        body:
-          body.toString(),
-      }
-    );
-
-  const text =
-    await response.text();
-
-  let data;
-
-  try {
-
-    data =
-      JSON.parse(text);
-
-  } catch {
-
-    throw new Error(
-      `Trezor API returned non-JSON response: ${text.slice(
-        0,
-        500
-      )}`
-    );
-
-  }
-
-  return data;
-}
-
-/* -------------------------------------------------------
-   STATIC RESPONSES
-------------------------------------------------------- */
-
-function serveText(
-  res,
-  status,
-  content,
-  contentType
-) {
-
-  res.writeHead(
-    status,
-    {
-      "Content-Type":
-        contentType,
-
-      "Cache-Control":
-        "public, max-age=300",
-    }
-  );
-
-  res.end(content);
-}
 
 function generateSitemap() {
 
-  const publicProducts =
+  const trezorProducts =
     products.filter(
       (product) =>
-        product.brand === "Trezor"
+        String(product.brand || "").toLowerCase() ===
+        "trezor"
     );
 
   const urls = [
-    "/",
-    "/compare",
 
-    ...publicProducts.map(
+    `${BASE_URL}/`,
+
+    `${BASE_URL}/compare`,
+
+    ...trezorProducts.map(
       (product) =>
-        `/${product.slug}`
+        `${BASE_URL}/${encodeURIComponent(
+          product.slug
+        )}`
     ),
+
   ];
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -3227,530 +2716,288 @@ function generateSitemap() {
 >
 ${urls
   .map(
-    (url) =>
-      `  <url>
-    <loc>${escapeHtml(
-      BASE_URL + url
-    )}</loc>
-  </url>`
+    (url) => `
+  <url>
+    <loc>${escapeHtml(url)}</loc>
+  </url>
+`
   )
-  .join("\n")}
+  .join("")}
 </urlset>`;
 }
 
-function generateRobots() {
 
-  return `User-agent: *
+/* -------------------------------------------------------
+   REQUEST HANDLER
+------------------------------------------------------- */
+
+const server = http.createServer(
+  async (req, res) => {
+
+    try {
+
+      const requestUrl =
+        new URL(
+          req.url,
+          BASE_URL
+        );
+
+      const pathname =
+        requestUrl.pathname;
+
+
+      /* -----------------------------------------------
+         SITEMAP
+      ----------------------------------------------- */
+
+      if (pathname === "/sitemap.xml") {
+
+        res.writeHead(
+          200,
+          {
+            "Content-Type":
+              "application/xml; charset=utf-8",
+          }
+        );
+
+        res.end(
+          generateSitemap()
+        );
+
+        return;
+      }
+
+
+      /* -----------------------------------------------
+         ROBOTS
+      ----------------------------------------------- */
+
+      if (pathname === "/robots.txt") {
+
+        res.writeHead(
+          200,
+          {
+            "Content-Type":
+              "text/plain; charset=utf-8",
+          }
+        );
+
+        res.end(
+          `User-agent: *
 Allow: /
 
 Sitemap: ${BASE_URL}/sitemap.xml
-`;
-}
+`
+        );
 
-/* -------------------------------------------------------
-   SERVER
-------------------------------------------------------- */
+        return;
+      }
 
-const server =
-  http.createServer(
-    async (req, res) => {
 
-      try {
+      /* -----------------------------------------------
+         Trezor AFFILIATE REDIRECT
+      ----------------------------------------------- */
 
-        const url =
-          new URL(
-            req.url,
-            `http://${
-              req.headers.host ||
-              "localhost"
-            }`
-          );
-
-        const pathname =
-          url.pathname;
-
-        /* STATIC PRODUCT IMAGES */
-
-        if (
-          pathname ===
-            "/trezor-safe-5.avif" ||
-          pathname ===
-            "/trezor-safe-3.avif"
-        ) {
-
-          const filename =
-            pathname.slice(1);
-
-          const filePath =
-            path.join(
-              __dirname,
-              filename
-            );
-
-          if (
-            !fs.existsSync(
-              filePath
-            )
-          ) {
-
-            return serveText(
-              res,
-              404,
-              "Image not found",
-              "text/plain; charset=utf-8"
-            );
-
-          }
-
-          res.writeHead(
-            200,
-            {
-              "Content-Type":
-                "image/avif",
-
-              "Cache-Control":
-                "public, max-age=31536000, immutable",
-            }
-          );
-
-          return res.end(
-            fs.readFileSync(
-              filePath
-            )
-          );
-
-        }
-
-        /* HEALTH */
-
-        if (
-          pathname ===
-          "/health"
-        ) {
-
-          return serveText(
-            res,
-            200,
-
-            JSON.stringify(
-              {
-                ok: true,
-
-                service:
-                  "wallet-radar",
-
-                products:
-                  products.length,
-
-                trezorApiConfigured:
-                  Boolean(
-                    TREZOR_API_KEY
-                  ),
-              },
-              null,
-              2
-            ),
-
-            "application/json; charset=utf-8"
-          );
-
-        }
-
-        /* ROBOTS */
-
-        if (
-          pathname ===
-          "/robots.txt"
-        ) {
-
-          return serveText(
-            res,
-            200,
-
-            generateRobots(),
-
-            "text/plain; charset=utf-8"
-          );
-
-        }
-
-        /* SITEMAP */
-
-        if (
-          pathname ===
-          "/sitemap.xml"
-        ) {
-
-          return serveText(
-            res,
-            200,
-
-            generateSitemap(),
-
-            "application/xml; charset=utf-8"
-          );
-
-        }
-
-        /* TREZOR TEST */
-
-        if (
-          pathname ===
-          "/api/trezor-test"
-        ) {
-
-          const result =
-            await trezorApiRequest(
-              "findAll",
-              {
-                "filters[status]":
-                  "active",
-
-                limit: 5,
-              }
-            );
-
-          return serveText(
-            res,
-            200,
-
-            JSON.stringify(
-              {
-                ok: true,
-
-                apiConfigured:
-                  Boolean(
-                    TREZOR_API_KEY
-                  ),
-
-                result,
-              },
-              null,
-              2
-            ),
-
-            "application/json; charset=utf-8"
-          );
-
-        }
-
-        /* TREZOR AFFILIATE REDIRECTS */
-
-        if (
-          pathname.startsWith(
-            "/go/"
-          )
-        ) {
-
-          const slug =
-            pathname
-              .replace(
-                /^\/go\//,
-                ""
-              )
-              .replace(
-                /\/+$/,
-                ""
-              );
-
-          const offerId =
-            TREZOR_OFFERS[
-              slug
-            ];
-
-          if (offerId) {
-
-            try {
-
-              const clickUrl =
-                await generateTrezorTrackingLink(
-                  offerId,
-                  "walletradar"
-                );
-
-              res.writeHead(
-                302,
-                {
-                  Location:
-                    clickUrl,
-
-                  "Cache-Control":
-                    "no-store",
-                }
-              );
-
-              return res.end();
-
-            } catch (err) {
-
-              console.error(
-                "Trezor affiliate redirect failed:",
-                err.message
-              );
-
-              return serveText(
-                res,
-                502,
-                "Affiliate redirect temporarily unavailable.",
-                "text/plain; charset=utf-8"
-              );
-
-            }
-
-          }
-
-        }
-
-        /* STATIC IMAGES */
-
-        if (
-          pathname.startsWith(
-            "/images/"
-          )
-        ) {
-
-          const relativePath =
-            pathname.replace(
-              /^\/+/,
-              ""
-            );
-
-          const filePath =
-            path.join(
-              __dirname,
-              relativePath
-            );
-
-          const imagesRoot =
-            path.join(
-              __dirname,
-              "images"
-            );
-
-          if (
-            !filePath.startsWith(
-              imagesRoot +
-                path.sep
-            )
-          ) {
-
-            return serveText(
-              res,
-              403,
-              "Forbidden",
-              "text/plain; charset=utf-8"
-            );
-
-          }
-
-          if (
-            !fs.existsSync(
-              filePath
-            )
-          ) {
-
-            return serveText(
-              res,
-              404,
-              "Image not found",
-              "text/plain; charset=utf-8"
-            );
-
-          }
-
-          const ext =
-            path.extname(
-              filePath
-            ).toLowerCase();
-
-          const contentTypes = {
-            ".avif":
-              "image/avif",
-
-            ".jpg":
-              "image/jpeg",
-
-            ".jpeg":
-              "image/jpeg",
-
-            ".png":
-              "image/png",
-
-            ".webp":
-              "image/webp",
-
-            ".svg":
-              "image/svg+xml",
-          };
-
-          const contentType =
-            contentTypes[ext] ||
-            "application/octet-stream";
-
-          res.writeHead(
-            200,
-            {
-              "Content-Type":
-                contentType,
-
-              "Cache-Control":
-                "public, max-age=31536000, immutable",
-            }
-          );
-
-          return res.end(
-            fs.readFileSync(
-              filePath
-            )
-          );
-
-        }
-
-        /* COMPARE */
-
-        if (
-          pathname ===
-          "/compare"
-        ) {
-
-          return serveText(
-            res,
-            200,
-
-            renderCompare(),
-
-            "text/html; charset=utf-8"
-          );
-
-        }
-
-        /* HOME */
-
-        if (
-          pathname === "/"
-        ) {
-
-          return serveText(
-            res,
-            200,
-
-            renderHome(),
-
-            "text/html; charset=utf-8"
-          );
-
-        }
-
-        /* PRODUCT */
+      if (
+        pathname.startsWith("/go/")
+      ) {
 
         const slug =
-          pathname
-            .replace(
-              /^\/+/,
-              ""
-            )
-            .replace(
-              /\/+$/,
-              ""
-            );
-
-        const product =
-          getProduct(slug);
-
-        if (product) {
-
-          return serveText(
-            res,
-            200,
-
-            renderProduct(
-              product
-            ),
-
-            "text/html; charset=utf-8"
+          decodeURIComponent(
+            pathname.substring(4)
           );
 
+        const offerId =
+          TREZOR_OFFERS[slug];
+
+        if (!offerId) {
+
+          res.writeHead(
+            404,
+            {
+              "Content-Type":
+                "text/plain; charset=utf-8",
+            }
+          );
+
+          res.end(
+            "Affiliate offer not found"
+          );
+
+          return;
         }
 
-        /* 404 */
+        try {
 
-        return serveText(
-          res,
-          404,
+          const trackingUrl =
+            await generateTrezorTrackingLink(
+              offerId,
+              "walletradar"
+            );
 
-          pageTemplate(
+          res.writeHead(
+            302,
             {
-              title:
-                "Page not found | CryptoWalletRadar",
-
-              description:
-                "The requested CryptoWalletRadar page could not be found.",
-
-              canonical:
-                `${BASE_URL}${pathname}`,
-
-              content: `
-                <main class="product-page">
-
-                  <div class="container">
-
-                    <h1
-                      style="
-                        font-size:52px;
-                      "
-                    >
-                      Page not found
-                    </h1>
-
-                    <p class="hero-text">
-                      The wallet or page you
-                      requested does not exist.
-                    </p>
-
-                    <a
-                      class="button"
-                      href="/"
-                      style="
-                        max-width:300px;
-                      "
-                    >
-                      Back to CryptoWalletRadar
-                    </a>
-
-                  </div>
-
-                </main>
-              `,
+              Location:
+                trackingUrl,
             }
-          ),
+          );
 
-          "text/html; charset=utf-8"
-        );
+          res.end();
 
-      } catch (err) {
+          return;
 
-        console.error(err);
+        } catch (error) {
 
-        return serveText(
-          res,
-          500,
+          console.error(
+            "Trezor tracking link error:",
+            error
+          );
 
-          JSON.stringify(
+          res.writeHead(
+            502,
             {
-              ok: false,
-
-              error:
-                err.message,
+              "Content-Type":
+                "text/plain; charset=utf-8",
             }
-          ),
+          );
 
-          "application/json; charset=utf-8"
-        );
+          res.end(
+            "Unable to generate affiliate link"
+          );
+
+          return;
+        }
 
       }
 
+
+      /* -----------------------------------------------
+         HOME
+      ----------------------------------------------- */
+
+      if (
+        pathname === "/" ||
+        pathname === ""
+      ) {
+
+        res.writeHead(
+          200,
+          {
+            "Content-Type":
+              "text/html; charset=utf-8",
+          }
+        );
+
+        res.end(
+          renderHome()
+        );
+
+        return;
+      }
+
+
+      /* -----------------------------------------------
+         COMPARE
+      ----------------------------------------------- */
+
+      if (
+        pathname === "/compare"
+      ) {
+
+        res.writeHead(
+          200,
+          {
+            "Content-Type":
+              "text/html; charset=utf-8",
+          }
+        );
+
+        res.end(
+          renderCompare()
+        );
+
+        return;
+      }
+
+
+      /* -----------------------------------------------
+         PRODUCT PAGE
+      ----------------------------------------------- */
+
+      const slug =
+        decodeURIComponent(
+          pathname.replace(
+            /^\/+/,
+            ""
+          )
+        );
+
+      const product =
+        getProduct(slug);
+
+      if (product) {
+
+        res.writeHead(
+          200,
+          {
+            "Content-Type":
+              "text/html; charset=utf-8",
+          }
+        );
+
+        res.end(
+          renderProduct(product)
+        );
+
+        return;
+      }
+
+
+      /* -----------------------------------------------
+         404
+      ----------------------------------------------- */
+
+      res.writeHead(
+        404,
+        {
+          "Content-Type":
+            "text/html; charset=utf-8",
+        }
+      );
+
+      res.end(
+        render404()
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Server error:",
+        error
+      );
+
+      res.writeHead(
+        500,
+        {
+          "Content-Type":
+            "text/plain; charset=utf-8",
+        }
+      );
+
+      res.end(
+        "Internal server error"
+      );
+
     }
-  );
+
+  }
+);
+
+
+/* -------------------------------------------------------
+   START SERVER
+------------------------------------------------------- */
 
 server.listen(
   PORT,
@@ -3758,16 +3005,6 @@ server.listen(
 
     console.log(
       `CryptoWalletRadar running on port ${PORT}`
-    );
-
-    console.log(
-      `Products loaded: ${products.length}`
-    );
-
-    console.log(
-      `Trezor API configured: ${Boolean(
-        TREZOR_API_KEY
-      )}`
     );
 
   }
