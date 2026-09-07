@@ -4,86 +4,48 @@ const http = require("http");
   CryptoWalletRadar homepage v8.
   Keeps v7's visual language, but moves the Deal Radar out of the hero so
   the real Trezor offers appear immediately after the intro/CTA.
+
+  v7 already buffers the homepage in __cwrChunks. We reuse that buffer and
+  let v7 perform its normal homepage transformation first; this layer only
+  adds a small post-layout move + styling.
 */
 const previousEnd = http.ServerResponse.prototype.end;
 
-function findMatchingBlock(html, start, openTag, closeTag) {
-  let depth = 0;
-  let pos = start;
-  while (pos < html.length) {
-    const nextOpen = html.indexOf(openTag, pos);
-    const nextClose = html.indexOf(closeTag, pos);
-    if (nextClose === -1) return -1;
-    if (nextOpen !== -1 && nextOpen < nextClose) {
-      depth += 1;
-      pos = nextOpen + openTag.length;
-    } else {
-      depth -= 1;
-      pos = nextClose + closeTag.length;
-      if (depth === 0) return pos;
-    }
+const moveRadarScript = `
+<script id="cwr-home-v8-script">
+(function(){
+  function moveRadar(){
+    var radar=document.querySelector('.hero-card.cwr-radar-card');
+    var wallets=document.querySelector('#wallets');
+    if(!radar||!wallets||document.querySelector('.cwr-radar-lower')) return;
+
+    var section=document.createElement('section');
+    section.className='cwr-radar-lower';
+    section.innerHTML='<div class="container"><div class="cwr-radar-lower-heading"><span>DEAL RADAR</span><h2>Know when a wallet is worth buying.</h2><p>Price history and market comparison turn today\'s price into one simple buying signal.</p></div></div>';
+    section.querySelector('.container').appendChild(radar);
+    wallets.parentNode.insertBefore(section,wallets.nextSibling);
+
+    var heroGrid=radar.closest('.hero-grid');
+    if(heroGrid) heroGrid.style.gridTemplateColumns='1fr';
   }
-  return -1;
-}
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',moveRadar);
+  else moveRadar();
+})();
+</script>`;
 
-function extractDiv(html, marker) {
-  const start = html.indexOf(marker);
-  if (start === -1) return null;
-  const openStart = html.lastIndexOf("<div", start);
-  const end = findMatchingBlock(html, openStart, "<div", "</div>");
-  if (openStart === -1 || end === -1) return null;
-  return { start: openStart, end, block: html.slice(openStart, end) };
-}
-
-function extractSection(html, marker) {
-  const start = html.indexOf(marker);
-  if (start === -1) return null;
-  const openStart = html.lastIndexOf("<section", start);
-  const end = findMatchingBlock(html, openStart, "<section", "</section>");
-  if (openStart === -1 || end === -1) return null;
-  return { start: openStart, end, block: html.slice(openStart, end) };
-}
-
-function transformHomepage(html) {
-  if (!html.includes('<section class="hero">') || !html.includes("cwr-radar-card")) return html;
-
-  const radar = extractDiv(html, 'class="hero-card cwr-radar-card"');
-  const wallets = extractSection(html, '<section id="wallets"');
-  if (!radar || !wallets || radar.start > wallets.start) return html;
-
-  const radarBlock = radar.block;
-  html = html.slice(0, radar.start) + html.slice(radar.end);
-
-  const walletsAfterRemoval = extractSection(html, '<section id="wallets"');
-  if (!walletsAfterRemoval) return html;
-
-  const lowerRadar = `
-<section class="cwr-radar-lower">
-  <div class="container">
-    <div class="cwr-radar-lower-heading">
-      <span>DEAL RADAR</span>
-      <h2>Know when a wallet is worth buying.</h2>
-      <p>Price history and market comparison turn today's price into one simple buying signal.</p>
-    </div>
-    ${radarBlock}
-  </div>
-</section>`;
-
-  html = html.slice(0, walletsAfterRemoval.end) + lowerRadar + html.slice(walletsAfterRemoval.end);
-
-  const css = `
+const css = `
 <style id="cwr-home-v8">
-/* v8: offers first, Deal Radar lower down */
+/* v8: the real wallet offers come directly after the hero */
 .hero .hero-grid{grid-template-columns:1fr!important;gap:0!important;align-items:start!important}
 .hero .hero-copy{max-width:820px!important}
 .hero{padding-bottom:38px!important}
-.hero-actions{margin-bottom:0!important}
+
 .cwr-radar-lower{
   padding:42px 0 58px!important;
   background:#f8fbf9!important;
   border-top:1px solid #edf2ee!important;
 }
-.cwr-radar-lower-heading{margin-bottom:18px!important;max-width:700px!important}
+.cwr-radar-lower-heading{margin:0 auto 18px!important;max-width:760px!important}
 .cwr-radar-lower-heading>span{
   display:inline-block!important;
   color:#18733c!important;
@@ -105,6 +67,7 @@ function transformHomepage(html) {
   line-height:1.55!important;
 }
 .cwr-radar-lower .hero-card.cwr-radar-card{
+  display:block!important;
   width:min(100%,760px)!important;
   min-height:0!important;
   margin:0 auto!important;
@@ -132,24 +95,32 @@ function transformHomepage(html) {
 }
 </style>`;
 
-  return html.replace("</head>", css + "</head>");
-}
-
 http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
-  if (this.__cwrV8Done) return previousEnd.call(this, chunk, encoding, callback);
-  this.__cwrV8Done = true;
-
-  let body = "";
-  if (this.__cwrV7Body) body = this.__cwrV7Body;
-  if (chunk) body += Buffer.isBuffer(chunk) ? chunk.toString(encoding) : String(chunk);
-
-  if (body.includes('<section class="hero">') && body.includes("cwr-radar-card")) {
-    body = transformHomepage(body);
-    return previousEnd.call(this, body, "utf8", callback);
+  if (!this.__cwrBuffering || !this.__cwrChunks) {
+    return previousEnd.call(this, chunk, encoding, callback);
   }
 
-  return previousEnd.call(this, chunk, encoding, callback);
-};
+  if (typeof encoding === "function") {
+    callback = encoding;
+    encoding = undefined;
+  }
 
-// v7 buffers the response in __cwrV7Body. This hook therefore only needs to
-// replace end(), and does not touch the server's pricing or affiliate logic.
+  // v7 owns the response buffer. Replace its current chunks with the same
+  // HTML plus our small v8 layout hook, then hand it back to v7's end().
+  if (chunk) {
+    this.__cwrChunks.push(Buffer.isBuffer(chunk)
+      ? chunk
+      : Buffer.from(String(chunk), encoding || "utf8"));
+  }
+
+  const source = Buffer.concat(this.__cwrChunks).toString("utf8");
+  if (!source.includes('<section class="hero">') || !source.includes('cwr-radar-card')) {
+    return previousEnd.call(this, chunk, encoding, callback);
+  }
+
+  const hooked = source.replace("</body>", css + moveRadarScript + "</body>");
+  this.__cwrChunks = [Buffer.from(hooked, "utf8")];
+  this.__cwrBuffering = true;
+
+  return previousEnd.call(this, null, "utf8", callback);
+};
