@@ -38,6 +38,7 @@ const css = `
 /* v8: the real wallet offers come directly after the hero */
 .hero .hero-grid{grid-template-columns:1fr!important;gap:0!important;align-items:start!important}
 .hero .hero-copy{max-width:820px!important}
+.hero .hero-card.cwr-radar-card{display:none!important}
 .hero{padding-bottom:38px!important}
 
 .cwr-radar-lower{
