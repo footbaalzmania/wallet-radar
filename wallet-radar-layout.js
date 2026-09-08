@@ -24,7 +24,8 @@ function extractElement(html, start) {
 
   while ((match = token.exec(html))) {
     const value = match[0];
-    if (/^<\\//.test(value)) {
+
+    if (value.startsWith("</")) {
       depth -= 1;
       if (depth === 0) {
         return {
@@ -32,7 +33,7 @@ function extractElement(html, start) {
           end: token.lastIndex,
         };
       }
-    } else if (!/\\/\\s*>$/.test(value)) {
+    } else if (!value.endsWith("/>") && !value.startsWith("<!")) {
       depth += 1;
     }
   }
@@ -57,9 +58,8 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
 
       if (heroCardStart >= 0 && walletsStart >= 0 && heroCardStart < walletsStart) {
         const heroCard = extractElement(html, heroCardStart);
-        const walletGrid = extractElement(html, walletsStart);
 
-        if (heroCard && walletGrid) {
+        if (heroCard) {
           html = html.slice(0, heroCardStart) + html.slice(heroCard.end);
 
           const updatedWalletsStart = html.indexOf('<div class="wallet-grid">');
