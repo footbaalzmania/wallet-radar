@@ -7,6 +7,39 @@ Module._extensions['.js'] = function(module, filename) {
 
   let source = fs.readFileSync(filename, 'utf8');
 
+  const EUR_RATE_FALLBACK = 24.8;
+
+  const marketHelpers = `
+function marketPriceEur(offer) {
+  if (!offer) return null;
+  const originalCurrency = String(offer.originalCurrency || '').toUpperCase();
+  const currency = String(offer.currency || '').toUpperCase();
+
+  if (originalCurrency === 'EUR' && Number.isFinite(Number(offer.originalPrice))) return Number(offer.originalPrice);
+  if (currency === 'EUR' && Number.isFinite(Number(offer.price))) return Number(offer.price);
+  if (Number.isFinite(Number(offer.priceCzk))) {
+    const rate = Number(offer.exchangeRate) || EUR_RATE_FALLBACK;
+    return Number(offer.priceCzk) / rate;
+  }
+  if (currency === 'CZK' && Number.isFinite(Number(offer.price))) {
+    const rate = Number(offer.exchangeRate) || EUR_RATE_FALLBACK;
+    return Number(offer.price) / rate;
+  }
+  return Number.isFinite(Number(offer.price)) ? Number(offer.price) : null;
+}
+
+function getOpenBoxOffer(product) {
+  if (!product || !Array.isArray(product.offers)) return null;
+  return product.offers
+    .filter((offer) => {
+      const store = String(offer.store || '').toLowerCase();
+      return store === 'idealo open box' || offer.condition === 'open-box';
+    })
+    .filter((offer) => Number.isFinite(marketPriceEur(offer)))
+    .sort((a, b) => marketPriceEur(a) - marketPriceEur(b))[0] || null;
+}
+`;
+
   const replacements = [
     [
 `function getMarketOffers(product) {
@@ -18,7 +51,8 @@ Module._extensions['.js'] = function(module, filename) {
     .filter((offer) => Number.isFinite(Number(offer.price)))
     .sort((a, b) => Number(a.price) - Number(b.price));
 }`,
-`function getMarketOffers(product) {
+marketHelpers + `
+function getMarketOffers(product) {
   if (!product || !Array.isArray(product.offers)) return [];
 
   return product.offers
@@ -28,39 +62,6 @@ Module._extensions['.js'] = function(module, filename) {
       return store !== 'idealo open box' && offer.condition !== 'open-box';
     })
     .sort((a, b) => marketPriceEur(a) - marketPriceEur(b));
-}
-
-function marketPriceEur(offer) {
-  if (!offer) return null;
-
-  const originalCurrency = String(offer.originalCurrency || '').toUpperCase();
-  const currency = String(offer.currency || '').toUpperCase();
-
-  if (originalCurrency === 'EUR' && Number.isFinite(Number(offer.originalPrice))) {
-    return Number(offer.originalPrice);
-  }
-  if (currency === 'EUR' && Number.isFinite(Number(offer.price))) {
-    return Number(offer.price);
-  }
-  if (Number.isFinite(Number(offer.priceCzk))) {
-    return Number(offer.priceCzk) / 24.8;
-  }
-  if (currency === 'CZK' && Number.isFinite(Number(offer.price))) {
-    return Number(offer.price) / 24.8;
-  }
-  return Number.isFinite(Number(offer.price)) ? Number(offer.price) : null;
-}
-
-function getOpenBoxOffer(product) {
-  if (!product || !Array.isArray(product.offers)) return null;
-
-  const offers = product.offers.filter((offer) => {
-    const store = String(offer.store || '').toLowerCase();
-    return store === 'idealo open box' || offer.condition === 'open-box';
-  });
-
-  offers.sort((a, b) => marketPriceEur(a) - marketPriceEur(b));
-  return offers[0] || null;
 }`
     ],
     [
@@ -75,8 +76,7 @@ function getOpenBoxOffer(product) {
 }`,
 `function getLowestMarketPrice(product) {
   const offers = getMarketOffers(product);
-  if (!offers.length) return null;
-  return marketPriceEur(offers[0]);
+  return offers.length ? marketPriceEur(offers[0]) : null;
 }`
     ],
     [
@@ -114,36 +114,43 @@ function getOpenBoxOffer(product) {
 `function getBestOffer(product) {
   const offers = getMarketOffers(product);
   if (!offers.length) return null;
-
   const offer = offers[0];
-  const priceEur = marketPriceEur(offer);
-  const openBox = getOpenBoxOffer(product);
-  const openBoxPriceEur = openBox ? marketPriceEur(openBox) : null;
-
-  return {
-    ...offer,
-    price: priceEur,
-    currency: "EUR",
-    store: openBox && Number.isFinite(openBoxPriceEur)
-      ? (offer.store || "market") + " · open-box " + openBoxPriceEur.toFixed(2) + " EUR"
-      : (offer.store || "market")
-  };
+  return { ...offer, price: marketPriceEur(offer), currency: "EUR" };
 }`
     ],
     [
-`    try {
-      const requestUrl = new URL(`,
-`    try {
-      // Reload persisted price data before every request so asynchronous collectors
-      // such as Idealo are visible without restarting the Node process.
-      try {
-        const freshProducts = JSON.parse(fs.readFileSync(productsPath, "utf8"));
-        if (Array.isArray(freshProducts)) products = freshProducts;
-      } catch (refreshErr) {
-        console.error("Live products refresh failed:", refreshErr.message);
-      }
+`function getPriceHistory(product) {
+  if (!product || !Array.isArray(product.priceHistory)) {
+    return [];
+  }
 
-      const requestUrl = new URL(`
+  return product.priceHistory
+    .filter(
+      (item) =>
+        item &&
+        Number.isFinite(Number(item.price)) &&
+        item.date
+    )
+    .sort((a, b) =>
+      String(a.date).localeCompare(String(b.date))
+    );
+}`,
+`function getPriceHistory(product) {
+  if (!product || !Array.isArray(product.priceHistory)) return [];
+
+  return product.priceHistory
+    .filter((item) => item && Number.isFinite(Number(item.price)) && item.date)
+    .map((item) => {
+      const currency = String(item.currency || product.currency || "CZK").toUpperCase();
+      let price = Number(item.price);
+      if (currency === "EUR") price = Number(item.originalPrice ?? item.price);
+      else if (Number.isFinite(Number(item.priceCzk))) price = Number(item.priceCzk) / (Number(item.exchangeRate) || EUR_RATE_FALLBACK);
+      else if (currency === "CZK") price = price / (Number(item.exchangeRate) || EUR_RATE_FALLBACK);
+      return { ...item, price, currency: "EUR" };
+    })
+    .filter((item) => Number.isFinite(item.price) && item.price > 0)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}`
     ]
   ];
 
@@ -155,96 +162,103 @@ function getOpenBoxOffer(product) {
     }
   }
 
-  const historyFunction = `
-function getPriceHistory(product) {
-  if (!product || !Array.isArray(product.priceHistory)) return [];
+  const oldRenderStart = 'function renderWalletCard(product) {';
+  const oldRenderEnd = '\nfunction renderHome() {';
+  const renderStart = source.indexOf(oldRenderStart);
+  const renderEnd = source.indexOf(oldRenderEnd, renderStart);
 
-  return product.priceHistory
-    .filter((item) => item && Number.isFinite(Number(item.price)) && item.date)
-    .map((item) => {
-      const currency = String(item.currency || product.currency || "CZK").toUpperCase();
-      let price = Number(item.price);
-      if (currency === "EUR") price = Number(item.originalPrice ?? item.price);
-      else if (Number.isFinite(Number(item.priceCzk))) price = Number(item.priceCzk) / 24.8;
-      else if (currency === "CZK") price = price / 24.8;
-      return { ...item, price, currency: "EUR" };
+  if (renderStart !== -1 && renderEnd !== -1) {
+    const newRenderWalletCard = `function renderWalletCard(product) {
+  const officialPrice = getOfficialPrice(product);
+  const officialCurrency = getOfficialPriceCurrency(product);
+  const marketPrice = getLowestMarketPrice(product);
+  const marketCurrency = getMarketCurrency(product);
+  const score = getDealScore(product);
+  const status = getDealStatus(score);
+  const bestOffer = getBestOffer(product);
+
+  const eur = (value) => Number.isFinite(Number(value)) ? formatPrice(Number(value), 'EUR') : '—';
+  const image = product.image ? \`
+    <a href="/go/\${escapeHtml(product.slug)}" class="wallet-image" aria-label="Buy \${escapeHtml(product.name)} at Trezor">
+      <img src="\${escapeHtml(product.image)}" alt="\${escapeHtml(product.name)}" loading="lazy">
+    </a>\` : '';
+
+  const idealoOffers = (Array.isArray(product.offers) ? product.offers : [])
+    .filter((offer) => {
+      const store = String(offer.store || '').toLowerCase();
+      return (store === 'idealo' || store === 'idealo open box' || store.startsWith('idealo ')) && Number.isFinite(marketPriceEur(offer));
     })
-    .filter((item) => Number.isFinite(item.price) && item.price > 0)
-    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-}
-`;
+    .sort((a, b) => marketPriceEur(a) - marketPriceEur(b));
 
-  source = source.replace(/function getPriceHistory\(product\) \{[\s\S]*?\n\}\n\nfunction getDealScore/, historyFunction + '\nfunction getDealScore');
-
-  const marketOffersFunction = `
-function renderMarketOffers(product) {
-  const allOffers = Array.isArray(product?.offers) ? product.offers : [];
-
-  const isIdealo = (offer) => {
-    const store = String(offer?.store || '').trim().toLowerCase();
-    return store === 'idealo' || store === 'idealo open box' || store.startsWith('idealo ');
-  };
-
-  const priceValue = (offer) => {
-    const originalCurrency = String(offer?.originalCurrency || '').toUpperCase();
-    if (originalCurrency === 'EUR' && Number.isFinite(Number(offer?.originalPrice))) return Number(offer.originalPrice);
-    const currency = String(offer?.currency || '').toUpperCase();
-    if (currency === 'EUR' && Number.isFinite(Number(offer?.price))) return Number(offer.price);
-    if (Number.isFinite(Number(offer?.priceCzk))) return Number(offer.priceCzk) / 24.8;
-    if (currency === 'CZK' && Number.isFinite(Number(offer?.price))) return Number(offer.price) / 24.8;
-    return Number.isFinite(Number(offer?.price)) ? Number(offer.price) : null;
-  };
-
-  const idealoOffers = allOffers
-    .filter((offer) => isIdealo(offer) && priceValue(offer) !== null)
-    .sort((a, b) => priceValue(a) - priceValue(b));
-
-  if (!idealoOffers.length) return '';
-
-  const standard = idealoOffers.find((offer) => {
-    const store = String(offer?.store || '').trim().toLowerCase();
-    return store === 'idealo' && offer?.condition !== 'open-box';
-  }) || idealoOffers.find((offer) => offer?.condition !== 'open-box') || null;
-
-  const openBox = idealoOffers.find((offer) => {
-    const store = String(offer?.store || '').trim().toLowerCase();
-    return store === 'idealo open box' || offer?.condition === 'open-box';
+  const newOffer = idealoOffers.find((offer) => {
+    const store = String(offer.store || '').toLowerCase();
+    return store === 'idealo' && offer.condition !== 'open-box';
   }) || null;
 
-  const offers = [standard, openBox].filter(Boolean);
-  if (!offers.length) return '';
+  const openBoxOffer = idealoOffers.find((offer) => {
+    const store = String(offer.store || '').toLowerCase();
+    return store === 'idealo open box' || offer.condition === 'open-box';
+  }) || null;
 
-  return '<div class="market-offers" style="margin-top:16px;padding:14px;border:1px solid #d7f2df;border-radius:16px;background:linear-gradient(135deg,#f3fff7,#ffffff);">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px;">' +
-      '<div><div style="font-size:12px;font-weight:900;color:#111827;letter-spacing:.08em;text-transform:uppercase;">Idealo Prices</div>' +
-      '<div style="font-size:11px;color:#15803d;margin-top:3px;">Best offers from idealo.de · EUR</div></div>' +
-      '<span style="font-size:11px;font-weight:900;color:#111827;">idealo</span>' +
-    '</div>' +
-    '<div style="display:grid;gap:8px;">' +
-    offers.map((offer) => {
-      const store = String(offer?.store || '').trim().toLowerCase();
-      const isOpenBox = store === 'idealo open box' || offer?.condition === 'open-box';
-      const price = priceValue(offer);
-      const label = isOpenBox ? 'Idealo · Open-box' : 'Idealo · New';
-      const url = offer?.url || offer?.affiliateUrl || 'https://www.idealo.de/';
+  const idealoRows = [newOffer, openBoxOffer].filter(Boolean).map((offer) => {
+    const store = String(offer.store || '').toLowerCase();
+    const openBox = store === 'idealo open box' || offer.condition === 'open-box';
+    const price = marketPriceEur(offer);
+    const url = offer.url || offer.affiliateUrl || 'https://www.idealo.de/';
+    return \`<a href="\${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;text-decoration:none;color:inherit;">
+      <span style="display:flex;flex-direction:column;min-width:0;"><span style="font-size:12px;color:#6b7280;">\${openBox ? 'Idealo · Open-box' : 'Idealo · New'}</span><strong style="font-size:15px;color:#111827;">\${eur(price)}</strong></span>
+      <span style="padding:7px 10px;border-radius:9px;background:#16a34a;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;">View offer ↗</span>
+    </a>\`;
+  }).join('');
 
-      return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;text-decoration:none;color:inherit;">' +
-        '<span style="display:flex;flex-direction:column;min-width:0;"><span style="font-size:12px;color:#6b7280;">' + escapeHtml(label) + '</span><strong style="font-size:15px;color:#111827;">' + formatPrice(price, 'EUR') + '</strong></span>' +
-        '<span style="padding:7px 10px;border-radius:9px;background:#16a34a;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;">View offer ↗</span></a>';
-    }).join('') +
-    '</div></div>';
+  const idealoCard = idealoRows ? \`
+    <div class="idealo-prices" style="margin-top:16px;padding:14px;border:1px solid #d7f2df;border-radius:16px;background:linear-gradient(135deg,#f3fff7,#ffffff);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px;">
+        <div><div style="font-size:12px;font-weight:900;color:#111827;letter-spacing:.08em;text-transform:uppercase;">Idealo Prices</div><div style="font-size:11px;color:#15803d;margin-top:3px;">Best offers from idealo.de · EUR</div></div>
+        <span style="font-size:11px;font-weight:900;color:#111827;">idealo</span>
+      </div>
+      <div style="display:grid;gap:8px;">\${idealoRows}</div>
+    </div>\` : '';
+
+  const scoreHtml = score === null
+    ? '<span class="deal-badge">Building price history</span>'
+    : '<span class="deal-badge">' + escapeHtml(status) + '</span><span class="deal-score">' + score + '/100</span>';
+
+  const bestOfferText = bestOffer ? 'Best market offer: ' + eur(bestOffer.price) : 'Market offers are being added';
+
+  return \`
+    <article class="wallet-card">
+      \${image}
+      <div class="wallet-content">
+        <div class="wallet-brand">\${escapeHtml(product.brand)}</div>
+        <div class="wallet-name">\${escapeHtml(product.name)}</div>
+        <div class="price-block">
+          <div class="official-label">Official Trezor price</div>
+          <div class="official-price">\${Number.isFinite(officialPrice) ? eur(officialPrice) : '—'}</div>
+          <div class="market-price">Market price: <strong>\${Number.isFinite(marketPrice) ? eur(marketPrice) : 'Not tracked yet'}</strong></div>
+        </div>
+        <div class="deal-row">\${scoreHtml}</div>
+        <div class="note">\${escapeHtml(bestOfferText)}</div>
+        \${idealoCard}
+        <div class="wallet-actions">
+          <a href="/go/\${escapeHtml(product.slug)}" class="buy-button">Buy at Trezor</a>
+          <a href="/product/\${escapeHtml(product.slug)}" class="secondary-button">View price history</a>
+        </div>
+      </div>
+    </article>
+  \`;
 }
 `;
 
-  if (source.includes('function renderWalletCard(product) {') && !source.includes('function renderMarketOffers(product) {')) {
-    source = source.replace('function renderWalletCard(product) {', marketOffersFunction + '\nfunction renderWalletCard(product) {');
+    source = source.slice(0, renderStart) + newRenderWalletCard + source.slice(renderEnd + 1);
+  } else {
+    console.warn('WalletRadar patch: renderWalletCard boundaries not found');
   }
 
-  if (!source.includes('${renderMarketOffers(product)}')) {
-    source = source.replace(
-      '        <div class="wallet-actions">',
-      '        ${renderMarketOffers(product)}\n\n        <div class="wallet-actions">'
-    );
+  // Refresh persisted collector data on each request.
+  const requestMarker = '    try {\n      const requestUrl = new URL(';
+  if (source.includes(requestMarker)) {
+    source = source.replace(requestMarker, `    try {\n      try {\n        const freshProducts = JSON.parse(fs.readFileSync(productsPath, "utf8"));\n        if (Array.isArray(freshProducts)) products = freshProducts;\n      } catch (refreshErr) {\n        console.error("Live products refresh failed:", refreshErr.message);\n      }\n\n      const requestUrl = new URL(`);
   }
 
   return module._compile(source, filename);
