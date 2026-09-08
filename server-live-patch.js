@@ -15,7 +15,7 @@ function marketPriceEur(offer) {
   const currency = String(offer.currency || '').toUpperCase();
   if (originalCurrency === 'EUR' && Number.isFinite(Number(offer.originalPrice))) return Number(offer.originalPrice);
   if (currency === 'EUR' && Number.isFinite(Number(offer.price))) return Number(offer.price);
-  const rate = Number(offer.exchangeRate) || EUR_RATE_FALLBACK;
+  const rate = Number(offer.exchangeRate) || 24.8;
   if (Number.isFinite(Number(offer.priceCzk))) return Number(offer.priceCzk) / rate;
   if (currency === 'CZK' && Number.isFinite(Number(offer.price))) return Number(offer.price) / rate;
   return Number.isFinite(Number(offer.price)) ? Number(offer.price) : null;
@@ -123,7 +123,7 @@ function getMarketOffers(product) {
     .map((item) => {
       const currency = String(item.currency || product.currency || "CZK").toUpperCase();
       let price = Number(item.price);
-      const rate = Number(item.exchangeRate) || EUR_RATE_FALLBACK;
+      const rate = Number(item.exchangeRate) || 24.8;
       if (currency === "EUR") price = Number(item.originalPrice ?? item.price);
       else if (Number.isFinite(Number(item.priceCzk))) price = Number(item.priceCzk) / rate;
       else if (currency === "CZK") price = price / rate;
@@ -139,8 +139,6 @@ function getMarketOffers(product) {
     else console.warn('WalletRadar patch: target not found');
   }
 
-  // Replace the complete wallet card renderer so the EUR display and Idealo block
-  // are independent of the original server renderer.
   const renderStart = source.indexOf('function renderWalletCard(product) {');
   const renderEnd = source.indexOf('\nfunction renderHome() {', renderStart);
   if (renderStart !== -1 && renderEnd !== -1) {
