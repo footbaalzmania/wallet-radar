@@ -7,55 +7,28 @@ const INTERVAL_MS = 6 * 60 * 60 * 1000;
 const ECB_EUR_CZK_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
 
 const PRODUCTS = {
-  "trezor-safe-3": {
-    name: "Trezor Safe 3",
-    url: "https://www.idealo.de/preisvergleich/OffersOfProduct/205145125_-safe-3-trezor.html",
-    min: 40,
-    max: 150,
-  },
-  "trezor-safe-5": {
-    name: "Trezor Safe 5",
-    url: "https://www.idealo.de/preisvergleich/OffersOfProduct/206151813_-safe-5-trezor.html",
-    min: 80,
-    max: 220,
-  },
-  "trezor-safe-7": {
-    name: "Trezor Safe 7",
-    url: "https://www.idealo.de/preisvergleich/OffersOfProduct/209319953_-trezor-safe-7-trezor.html",
-    min: 150,
-    max: 400,
-  },
+  "trezor-safe-3": { name: "Trezor Safe 3", url: "https://www.idealo.de/preisvergleich/OffersOfProduct/205145125_-safe-3-trezor.html", min: 40, max: 150 },
+  "trezor-safe-5": { name: "Trezor Safe 5", url: "https://www.idealo.de/preisvergleich/OffersOfProduct/206151813_-safe-5-trezor.html", min: 80, max: 220 },
+  "trezor-safe-7": { name: "Trezor Safe 7", url: "https://www.idealo.de/preisvergleich/OffersOfProduct/209319953_-trezor-safe-7-trezor.html", min: 150, max: 400 },
 };
 
 function loadProducts() {
   try { return JSON.parse(fs.readFileSync(productsPath, "utf8")); }
   catch (err) { console.error("Idealo: failed to load products.json:", err.message); return null; }
 }
-
 function saveProducts(products) {
-  try {
-    fs.writeFileSync(productsPath, JSON.stringify(products, null, 2) + "\n", "utf8");
-    return true;
-  } catch (err) {
-    console.error("Idealo: failed to save products.json:", err.message);
-    return false;
-  }
+  try { fs.writeFileSync(productsPath, JSON.stringify(products, null, 2) + "\n", "utf8"); return true; }
+  catch (err) { console.error("Idealo: failed to save products.json:", err.message); return false; }
 }
-
 function parsePrice(value) {
   const price = Number(String(value).replace(",", "."));
   return Number.isFinite(price) ? price : null;
 }
-
-function validPrice(value, config) {
-  return Number.isFinite(value) && value >= config.min && value <= config.max;
-}
-
+function validPrice(value, config) { return Number.isFinite(value) && value >= config.min && value <= config.max; }
 function findProductSection(source, config) {
   const escapedName = config.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const heading = new RegExp(`#\\s*(?:Trezor\\s+)?${escapedName}\\b`, "i").exec(source);
   if (!heading) return null;
-
   const start = heading.index;
   const top10 = source.toLowerCase().indexOf("top 10 produkte", start + heading[0].length);
   const end = top10 >= 0 ? top10 : Math.min(source.length, start + 8000);
@@ -63,40 +36,49 @@ function findProductSection(source, config) {
 }
 
 function extractIdealoPrices(text, config) {
-  const source = String(text || "")
-    .replace(/[\u00a0\u202f]/g, " ")
-    .replace(/\r/g, "");
-
+  const source = String(text || "").replace(/[\u00a0\u202f]/g, " ").replace(/\r/g, "");
   const section = findProductSection(source, config);
   if (!section) return { standard: null, openBox: null };
 
-  // Idealo/Jina can flatten an open-box offer into the product summary and
-  // report e.g. "Varianten ab 109 €", even though the actual new-product
-  // offer is 119 €. Detect the open-box price first and never accept it as
-  // the standard price.
-  const summary = section.match(/\b(?:\d+\s+)?Varianten\s+ab\s+([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/i);
-  let standard = summary ? parsePrice(summary[1]) : null;
+  // Do not trust Idealo's "Varianten ab" summary: Jina can make an open-box
+  // offer the summary price. Instead identify the open-box price and then
+  // select the lowest valid price belonging to a normal/new offer.
+  const allPrices = [...section.matchAll(/([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/g)]
+    .map((m) => parsePrice(m[1]))
+    .filter((p) => validPrice(p, config));
 
   let openBox = null;
   const openBoxMatch = /geöffnete?r?\s+Verpackung/i.exec(section);
   if (openBoxMatch) {
-    const before = section.slice(Math.max(0, openBoxMatch.index - 700), openBoxMatch.index);
+    const before = section.slice(Math.max(0, openBoxMatch.index - 900), openBoxMatch.index);
     const pricesBefore = [...before.matchAll(/([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/g)]
-      .map((match) => parsePrice(match[1]))
-      .filter((price) => validPrice(price, config));
+      .map((m) => parsePrice(m[1]))
+      .filter((p) => validPrice(p, config));
     if (pricesBefore.length) openBox = pricesBefore[pricesBefore.length - 1];
+  }
 
-    // If the summary itself points at the open-box price, look forward to
-    // the first valid offer price after the open-box listing. On Idealo this
-    // is the normal new-product offer (currently 119 € for Safe 5).
-    if (Number.isFinite(openBox) && Number.isFinite(standard) && standard === openBox) {
-      const after = section.slice(openBoxMatch.index + openBoxMatch[0].length);
-      const pricesAfter = [...after.matchAll(/([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/g)]
-        .map((match) => parsePrice(match[1]))
-        .filter((price) => price !== openBox && validPrice(price, config));
-      if (pricesAfter.length) standard = pricesAfter[0];
-      else standard = null;
-    }
+  let standard = null;
+  if (Number.isFinite(openBox)) {
+    // The normal offer is typically listed after the open-box offer in the
+    // flattened Idealo page. Prefer the lowest valid non-open-box price after
+    // that listing; this avoids selecting unrelated earlier prices.
+    const after = section.slice(openBoxMatch.index + openBoxMatch[0].length);
+    const afterPrices = [...after.matchAll(/([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/g)]
+      .map((m) => parsePrice(m[1]))
+      .filter((p) => validPrice(p, config) && p !== openBox);
+    if (afterPrices.length) standard = Math.min(...afterPrices);
+  }
+
+  // Products without an open-box listing (e.g. Safe 7) can use the summary,
+  // while a missing summary falls back to the lowest valid product price.
+  if (!Number.isFinite(standard)) {
+    const summary = section.match(/\b(?:\d+\s+)?Varianten\s+ab\s+([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/i);
+    const summaryPrice = summary ? parsePrice(summary[1]) : null;
+    if (validPrice(summaryPrice, config) && summaryPrice !== openBox) standard = summaryPrice;
+  }
+  if (!Number.isFinite(standard)) {
+    const candidates = allPrices.filter((p) => p !== openBox);
+    if (candidates.length) standard = Math.min(...candidates);
   }
 
   return {
@@ -106,56 +88,29 @@ function extractIdealoPrices(text, config) {
 }
 
 async function fetchReader(url) {
-  const response = await fetch(READER_BASE + url, {
-    headers: {
-      "User-Agent": "CryptoWalletRadar/1.0",
-      Accept: "text/plain,text/html;q=0.9,*/*;q=0.8",
-    },
-  });
+  const response = await fetch(READER_BASE + url, { headers: { "User-Agent": "CryptoWalletRadar/1.0", Accept: "text/plain,text/html;q=0.9,*/*;q=0.8" } });
   if (!response.ok) throw new Error(`Reader returned HTTP ${response.status}`);
   return response.text();
 }
-
 async function fetchEurCzkRate() {
   try {
-    const response = await fetch(ECB_EUR_CZK_URL, {
-      headers: {
-        "User-Agent": "CryptoWalletRadar/1.0",
-        Accept: "application/xml,text/xml;q=0.9,*/*;q=0.8",
-      },
-    });
+    const response = await fetch(ECB_EUR_CZK_URL, { headers: { "User-Agent": "CryptoWalletRadar/1.0", Accept: "application/xml,text/xml;q=0.9,*/*;q=0.8" } });
     if (!response.ok) throw new Error(`ECB returned HTTP ${response.status}`);
     const xml = await response.text();
     const match = xml.match(/currency='CZK'\s+rate='([0-9.]+)'/i);
     const rate = match ? Number(match[1]) : null;
     if (!Number.isFinite(rate) || rate <= 0) throw new Error("EUR/CZK rate not found");
     return rate;
-  } catch (err) {
-    console.error("Idealo: EUR/CZK update failed:", err.message);
-    return null;
-  }
+  } catch (err) { console.error("Idealo: EUR/CZK update failed:", err.message); return null; }
 }
-
 function upsertOffer(product, store, price, priceCzk, config, url, condition = "new") {
   if (!Number.isFinite(price)) return false;
   if (!Array.isArray(product.offers)) product.offers = [];
-
   let offer = product.offers.find((item) => String(item.store || "").toLowerCase() === store.toLowerCase());
   if (!offer) {
-    product.offers.push({
-      store,
-      price,
-      currency: "EUR",
-      priceCzk: Number.isFinite(priceCzk) ? priceCzk : null,
-      exchangeRate: Number.isFinite(priceCzk) ? priceCzk / price : null,
-      condition,
-      priceSource: "automatic",
-      affiliateUrl: null,
-      url,
-    });
+    product.offers.push({ store, price, currency: "EUR", priceCzk: Number.isFinite(priceCzk) ? priceCzk : null, exchangeRate: Number.isFinite(priceCzk) ? priceCzk / price : null, condition, priceSource: "automatic", affiliateUrl: null, url });
     return true;
   }
-
   let changed = false;
   if (Number(offer.price) !== price) { offer.price = price; changed = true; }
   if (offer.currency !== "EUR") { offer.currency = "EUR"; changed = true; }
@@ -166,51 +121,32 @@ function upsertOffer(product, store, price, priceCzk, config, url, condition = "
   if (offer.url !== url) { offer.url = url; changed = true; }
   return changed;
 }
-
 async function updateIdealo() {
   const products = loadProducts();
   if (!Array.isArray(products)) return;
-
   const eurCzkRate = await fetchEurCzkRate();
   let changed = false;
-
   for (const [slug, config] of Object.entries(PRODUCTS)) {
     const product = products.find((item) => item.slug === slug);
     if (!product) continue;
-
     try {
       const text = await fetchReader(config.url);
       const prices = extractIdealoPrices(text, config);
-
-      const standardCzk = Number.isFinite(eurCzkRate) && Number.isFinite(prices.standard)
-        ? Math.round(prices.standard * eurCzkRate * 100) / 100
-        : null;
-      const openBoxCzk = Number.isFinite(eurCzkRate) && Number.isFinite(prices.openBox)
-        ? Math.round(prices.openBox * eurCzkRate * 100) / 100
-        : null;
-
-      if (!Number.isFinite(prices.standard)) {
-        console.log(`Idealo: ${config.name} standard price not found`);
-      } else {
+      const standardCzk = Number.isFinite(eurCzkRate) && Number.isFinite(prices.standard) ? Math.round(prices.standard * eurCzkRate * 100) / 100 : null;
+      const openBoxCzk = Number.isFinite(eurCzkRate) && Number.isFinite(prices.openBox) ? Math.round(prices.openBox * eurCzkRate * 100) / 100 : null;
+      if (!Number.isFinite(prices.standard)) console.log(`Idealo: ${config.name} standard price not found`);
+      else {
         changed = upsertOffer(product, "Idealo", prices.standard, standardCzk, config, config.url, "new") || changed;
         console.log(`Idealo: ${config.name} standard = ${prices.standard.toFixed(2)} EUR` + (Number.isFinite(standardCzk) ? ` (~${Math.round(standardCzk)} CZK)` : ""));
       }
-
       if (Number.isFinite(prices.openBox)) {
         changed = upsertOffer(product, "Idealo Open Box", prices.openBox, openBoxCzk, config, config.url, "open-box") || changed;
         console.log(`Idealo: ${config.name} open box = ${prices.openBox.toFixed(2)} EUR` + (Number.isFinite(openBoxCzk) ? ` (~${Math.round(openBoxCzk)} CZK)` : ""));
       }
-    } catch (err) {
-      console.error(`Idealo: ${config.name} update failed:`, err.message);
-    }
+    } catch (err) { console.error(`Idealo: ${config.name} update failed:`, err.message); }
   }
-
-  if (changed && saveProducts(products)) {
-    console.log("Idealo price update saved to products.json");
-  } else if (!changed) {
-    console.log("Idealo price update: no changes");
-  }
+  if (changed && saveProducts(products)) console.log("Idealo price update saved to products.json");
+  else if (!changed) console.log("Idealo price update: no changes");
 }
-
 setTimeout(updateIdealo, 10000);
 setInterval(updateIdealo, INTERVAL_MS);
