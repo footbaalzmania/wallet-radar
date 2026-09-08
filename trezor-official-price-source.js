@@ -34,34 +34,33 @@ function saveProducts(products) {
 
 function cleanText(value) {
   return String(value || "")
-    .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
-    .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
-    .replace(/\\u00a0/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function extractMoney(text) {
   const normalized = cleanText(text);
   const matches = [];
-  const re = /(€|EUR|Kč|CZK)\\s*(\\d{1,3}(?:[ .]\\d{3})*(?:[,.]\\d{1,2})?|\\d{3,5})|(\\d{1,3}(?:[ .]\\d{3})*(?:[,.]\\d{1,2})?|\\d{3,5})\\s*(€|EUR|Kč|CZK)/gi;
+  const re = /(€|EUR|Kč|CZK)\s*(\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{1,2})?|\d{3,5})|(\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{1,2})?|\d{3,5})\s*(€|EUR|Kč|CZK)/gi;
   let match;
 
   while ((match = re.exec(normalized))) {
     const currency = (match[1] || match[5] || "").toUpperCase();
     const raw = match[2] || match[4] || "";
-    const number = raw.replace(/\\s/g, "").replace(/\\.(?=\\d{3}(?:\\D|$))/g, "").replace(/,(?=\\d{1,2}(?:\\D|$))/g, ".");
-    const price = Number(number);
+    const normalizedNumber = raw.replace(/[ .]/g, "").replace(",", ".");
+    const price = Number(normalizedNumber);
     if (!Number.isFinite(price)) continue;
+
     if ((currency === "EUR" || currency === "€") && price >= 20 && price <= 1000) {
-      matches.push({ price, currency: "EUR", index: match.index, end: re.lastIndex });
+      matches.push({ price, currency: "EUR", index: match.index });
     } else if ((currency === "CZK" || currency === "KČ") && price >= 500 && price <= 20_000) {
-      matches.push({ price, currency: "CZK", index: match.index, end: re.lastIndex });
+      matches.push({ price, currency: "CZK", index: match.index });
     }
   }
 
@@ -141,8 +140,7 @@ async function updateOfficialPrices() {
       let result = sourceText ? findPriceNearProduct(sourceText, config.name) : null;
 
       if (!result) {
-        const pageUrl = `https://trezor.io/cs/${slug}`;
-        const raw = await fetchBest(pageUrl);
+        const raw = await fetchBest(`https://trezor.io/cs/${slug}`);
         result = findPriceNearProduct(raw, config.name);
       }
 
@@ -151,20 +149,11 @@ async function updateOfficialPrices() {
         continue;
       }
 
-      if (result.currency === "CZK") {
-        if (Number(product.officialPrice) !== result.price || product.officialPriceCurrency !== "CZK") {
-          product.officialPrice = result.price;
-          product.officialPriceCurrency = "CZK";
-          changed = true;
-        }
-      } else {
-        product.officialPrice = result.price;
-        product.officialPriceCurrency = "EUR";
-        changed = true;
-      }
-
+      product.officialPrice = result.price;
+      product.officialPriceCurrency = result.currency;
       product.officialPriceSource = "trezor.io";
       product.officialPriceUpdatedAt = new Date().toISOString();
+      changed = true;
       console.log(`Trezor official: ${config.name} = ${result.price} ${result.currency}`);
     } catch (err) {
       console.error(`Trezor official: ${config.name} update failed:`, err.message);
