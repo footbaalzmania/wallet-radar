@@ -4,11 +4,12 @@ const path = require("path");
 const productsPath = path.join(__dirname, "products.json");
 const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const TIMEOUT_MS = 25_000;
+const STORE_URL = "https://trezor.io/cs/store";
 
 const TREZOR_PRODUCTS = {
-  "trezor-safe-3": { name: "Trezor Safe 3", url: "https://trezor.io/cs/trezor-safe-3" },
-  "trezor-safe-5": { name: "Trezor Safe 5", url: "https://trezor.io/cs/trezor-safe-5" },
-  "trezor-safe-7": { name: "Trezor Safe 7", url: "https://trezor.io/cs/trezor-safe-7" },
+  "trezor-safe-3": { name: "Trezor Safe 3" },
+  "trezor-safe-5": { name: "Trezor Safe 5" },
+  "trezor-safe-7": { name: "Trezor Safe 7" },
 };
 
 function loadProducts() {
@@ -33,26 +34,34 @@ function saveProducts(products) {
 
 function cleanText(value) {
   return String(value || "")
+    .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
+    .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
-    .replace(/\u00a0/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/\\u00a0/g, " ")
+    .replace(/\\s+/g, " ")
     .trim();
 }
 
-function extractPrices(text) {
+function extractMoney(text) {
   const normalized = cleanText(text);
   const matches = [];
-  const re = /(\d{1,3}(?:[ .]\d{3})+|\d{3,5})\s*(?:Kč|CZK|,-)/gi;
+  const re = /(€|EUR|Kč|CZK)\\s*(\\d{1,3}(?:[ .]\\d{3})*(?:[,.]\\d{1,2})?|\\d{3,5})|(\\d{1,3}(?:[ .]\\d{3})*(?:[,.]\\d{1,2})?|\\d{3,5})\\s*(€|EUR|Kč|CZK)/gi;
   let match;
 
   while ((match = re.exec(normalized))) {
-    const price = Number(match[1].replace(/[ .]/g, ""));
-    if (Number.isFinite(price) && price >= 500 && price <= 20_000) {
-      matches.push({ price, index: match.index });
+    const currency = (match[1] || match[5] || "").toUpperCase();
+    const raw = match[2] || match[4] || "";
+    const number = raw.replace(/\\s/g, "").replace(/\\.(?=\\d{3}(?:\\D|$))/g, "").replace(/,(?=\\d{1,2}(?:\\D|$))/g, ".");
+    const price = Number(number);
+    if (!Number.isFinite(price)) continue;
+    if ((currency === "EUR" || currency === "€") && price >= 20 && price <= 1000) {
+      matches.push({ price, currency: "EUR", index: match.index, end: re.lastIndex });
+    } else if ((currency === "CZK" || currency === "KČ") && price >= 500 && price <= 20_000) {
+      matches.push({ price, currency: "CZK", index: match.index, end: re.lastIndex });
     }
   }
 
@@ -63,12 +72,12 @@ function findPriceNearProduct(text, productName) {
   const normalized = cleanText(text);
   const lower = normalized.toLowerCase();
   const needle = productName.toLowerCase();
-  const prices = extractPrices(normalized);
+  const prices = extractMoney(normalized);
 
   let from = lower.indexOf(needle);
   while (from !== -1) {
-    const candidate = prices.find((item) => item.index >= from && item.index <= from + 1800);
-    if (candidate) return candidate.price;
+    const candidate = prices.find((item) => item.index >= from && item.index <= from + 2500);
+    if (candidate) return candidate;
     from = lower.indexOf(needle, from + needle.length);
   }
 
@@ -96,13 +105,18 @@ async function fetchText(url) {
   }
 }
 
-async function fetchTrezorProductText(url) {
+async function fetchReader(url) {
+  return fetchText(`https://r.jina.ai/${url}`);
+}
+
+async function fetchBest(url) {
   try {
-    return await fetchText(url);
-  } catch (directErr) {
-    console.warn(`Trezor official: direct fetch failed (${directErr.message}), trying reader`);
-    return await fetchText(`https://r.jina.ai/${url}`);
+    const direct = await fetchText(url);
+    if (direct && direct.length > 1000) return direct;
+  } catch (err) {
+    console.warn(`Trezor official: direct fetch failed (${err.message})`);
   }
+  return fetchReader(url);
 }
 
 async function updateOfficialPrices() {
@@ -110,29 +124,48 @@ async function updateOfficialPrices() {
   if (!products.length) return;
 
   let changed = false;
+  let sourceText = "";
+
+  try {
+    sourceText = await fetchBest(STORE_URL);
+    console.log(`Trezor official: store source loaded (${sourceText.length} chars)`);
+  } catch (err) {
+    console.error("Trezor official: store fetch failed:", err.message);
+  }
 
   for (const [slug, config] of Object.entries(TREZOR_PRODUCTS)) {
     const product = products.find((item) => item.slug === slug);
     if (!product) continue;
 
     try {
-      const raw = await fetchTrezorProductText(config.url);
-      const price = findPriceNearProduct(raw, config.name);
+      let result = sourceText ? findPriceNearProduct(sourceText, config.name) : null;
 
-      if (!Number.isFinite(price)) {
+      if (!result) {
+        const pageUrl = `https://trezor.io/cs/${slug}`;
+        const raw = await fetchBest(pageUrl);
+        result = findPriceNearProduct(raw, config.name);
+      }
+
+      if (!result) {
         console.warn(`Trezor official: ${config.name} price not found`);
         continue;
       }
 
-      if (Number(product.officialPrice) !== price || product.officialPriceCurrency !== "CZK") {
-        product.officialPrice = price;
-        product.officialPriceCurrency = "CZK";
+      if (result.currency === "CZK") {
+        if (Number(product.officialPrice) !== result.price || product.officialPriceCurrency !== "CZK") {
+          product.officialPrice = result.price;
+          product.officialPriceCurrency = "CZK";
+          changed = true;
+        }
+      } else {
+        product.officialPrice = result.price;
+        product.officialPriceCurrency = "EUR";
         changed = true;
       }
 
       product.officialPriceSource = "trezor.io";
       product.officialPriceUpdatedAt = new Date().toISOString();
-      console.log(`Trezor official: ${config.name} = ${price} CZK`);
+      console.log(`Trezor official: ${config.name} = ${result.price} ${result.currency}`);
     } catch (err) {
       console.error(`Trezor official: ${config.name} update failed:`, err.message);
     }
