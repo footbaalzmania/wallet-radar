@@ -27,11 +27,28 @@ Module._extensions['.js'] = function(module, filename) {
       const store = String(offer.store || '').toLowerCase();
       return store !== 'idealo open box' && offer.condition !== 'open-box';
     })
-    .sort((a, b) => {
-      const ap = Number.isFinite(Number(a.priceCzk)) ? Number(a.priceCzk) : Number(a.price);
-      const bp = Number.isFinite(Number(b.priceCzk)) ? Number(b.priceCzk) : Number(b.price);
-      return ap - bp;
-    });
+    .sort((a, b) => marketPriceEur(a) - marketPriceEur(b));
+}
+
+function marketPriceEur(offer) {
+  if (!offer) return null;
+
+  const originalCurrency = String(offer.originalCurrency || '').toUpperCase();
+  const currency = String(offer.currency || '').toUpperCase();
+
+  if (originalCurrency === 'EUR' && Number.isFinite(Number(offer.originalPrice))) {
+    return Number(offer.originalPrice);
+  }
+  if (currency === 'EUR' && Number.isFinite(Number(offer.price))) {
+    return Number(offer.price);
+  }
+  if (Number.isFinite(Number(offer.priceCzk))) {
+    return Number(offer.priceCzk) / 24.8;
+  }
+  if (currency === 'CZK' && Number.isFinite(Number(offer.price))) {
+    return Number(offer.price) / 24.8;
+  }
+  return Number.isFinite(Number(offer.price)) ? Number(offer.price) : null;
 }
 
 function getOpenBoxOffer(product) {
@@ -42,12 +59,7 @@ function getOpenBoxOffer(product) {
     return store === 'idealo open box' || offer.condition === 'open-box';
   });
 
-  offers.sort((a, b) => {
-    const ap = Number.isFinite(Number(a.priceCzk)) ? Number(a.priceCzk) : Number(a.price);
-    const bp = Number.isFinite(Number(b.priceCzk)) ? Number(b.priceCzk) : Number(b.price);
-    return ap - bp;
-  });
-
+  offers.sort((a, b) => marketPriceEur(a) - marketPriceEur(b));
   return offers[0] || null;
 }`
     ],
@@ -63,13 +75,8 @@ function getOpenBoxOffer(product) {
 }`,
 `function getLowestMarketPrice(product) {
   const offers = getMarketOffers(product);
-
   if (!offers.length) return null;
-
-  const offer = offers[0];
-  return Number.isFinite(Number(offer.priceCzk))
-    ? Number(offer.priceCzk)
-    : Number(offer.price);
+  return marketPriceEur(offers[0]);
 }`
     ],
     [
@@ -83,7 +90,15 @@ function getOpenBoxOffer(product) {
   return product?.currency || "CZK";
 }`,
 `function getMarketCurrency(product) {
-  return "CZK";
+  return "EUR";
+}`
+    ],
+    [
+`function getOfficialPriceCurrency(product) {
+  return product?.officialPriceCurrency || product?.currency || "CZK";
+}`,
+`function getOfficialPriceCurrency(product) {
+  return "EUR";
 }`
     ],
     [
@@ -101,15 +116,16 @@ function getOpenBoxOffer(product) {
   if (!offers.length) return null;
 
   const offer = offers[0];
-  const priceCzk = Number.isFinite(Number(offer.priceCzk)) ? Number(offer.priceCzk) : Number(offer.price);
+  const priceEur = marketPriceEur(offer);
   const openBox = getOpenBoxOffer(product);
+  const openBoxPriceEur = openBox ? marketPriceEur(openBox) : null;
 
   return {
     ...offer,
-    price: priceCzk,
-    currency: "CZK",
-    store: openBox
-      ? (offer.store || "market") + " · open-box " + (Number.isFinite(Number(openBox.priceCzk)) ? Math.round(Number(openBox.priceCzk)) : Number(openBox.price)) + " CZK"
+    price: priceEur,
+    currency: "EUR",
+    store: openBox && Number.isFinite(openBoxPriceEur)
+      ? (offer.store || "market") + " · open-box " + openBoxPriceEur.toFixed(2) + " EUR"
       : (offer.store || "market")
   };
 }`
@@ -139,6 +155,27 @@ function getOpenBoxOffer(product) {
     }
   }
 
+  const historyFunction = `
+function getPriceHistory(product) {
+  if (!product || !Array.isArray(product.priceHistory)) return [];
+
+  return product.priceHistory
+    .filter((item) => item && Number.isFinite(Number(item.price)) && item.date)
+    .map((item) => {
+      const currency = String(item.currency || product.currency || "CZK").toUpperCase();
+      let price = Number(item.price);
+      if (currency === "EUR") price = Number(item.originalPrice ?? item.price);
+      else if (Number.isFinite(Number(item.priceCzk))) price = Number(item.priceCzk) / 24.8;
+      else if (currency === "CZK") price = price / 24.8;
+      return { ...item, price, currency: "EUR" };
+    })
+    .filter((item) => Number.isFinite(item.price) && item.price > 0)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+`;
+
+  source = source.replace(/function getPriceHistory\(product\) \{[\s\S]*?\n\}\n\nfunction getDealScore/, historyFunction + '\nfunction getDealScore');
+
   const marketOffersFunction = `
 function renderMarketOffers(product) {
   const allOffers = Array.isArray(product?.offers) ? product.offers : [];
@@ -149,9 +186,13 @@ function renderMarketOffers(product) {
   };
 
   const priceValue = (offer) => {
-    if (Number.isFinite(Number(offer?.priceCzk))) return Number(offer.priceCzk);
-    if (Number.isFinite(Number(offer?.price))) return Number(offer.price);
-    return null;
+    const originalCurrency = String(offer?.originalCurrency || '').toUpperCase();
+    if (originalCurrency === 'EUR' && Number.isFinite(Number(offer?.originalPrice))) return Number(offer.originalPrice);
+    const currency = String(offer?.currency || '').toUpperCase();
+    if (currency === 'EUR' && Number.isFinite(Number(offer?.price))) return Number(offer.price);
+    if (Number.isFinite(Number(offer?.priceCzk))) return Number(offer.priceCzk) / 24.8;
+    if (currency === 'CZK' && Number.isFinite(Number(offer?.price))) return Number(offer.price) / 24.8;
+    return Number.isFinite(Number(offer?.price)) ? Number(offer.price) : null;
   };
 
   const idealoOffers = allOffers
@@ -176,7 +217,7 @@ function renderMarketOffers(product) {
   return '<div class="market-offers" style="margin-top:16px;padding:14px;border:1px solid #d7f2df;border-radius:16px;background:linear-gradient(135deg,#f3fff7,#ffffff);">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px;">' +
       '<div><div style="font-size:12px;font-weight:900;color:#111827;letter-spacing:.08em;text-transform:uppercase;">Idealo Prices</div>' +
-      '<div style="font-size:11px;color:#15803d;margin-top:3px;">Best offers from idealo.de</div></div>' +
+      '<div style="font-size:11px;color:#15803d;margin-top:3px;">Best offers from idealo.de · EUR</div></div>' +
       '<span style="font-size:11px;font-weight:900;color:#111827;">idealo</span>' +
     '</div>' +
     '<div style="display:grid;gap:8px;">' +
@@ -184,12 +225,11 @@ function renderMarketOffers(product) {
       const store = String(offer?.store || '').trim().toLowerCase();
       const isOpenBox = store === 'idealo open box' || offer?.condition === 'open-box';
       const price = priceValue(offer);
-      const currency = Number.isFinite(Number(offer?.priceCzk)) ? 'CZK' : (offer?.currency || 'CZK');
       const label = isOpenBox ? 'Idealo · Open-box' : 'Idealo · New';
       const url = offer?.url || offer?.affiliateUrl || 'https://www.idealo.de/';
 
       return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;text-decoration:none;color:inherit;">' +
-        '<span style="display:flex;flex-direction:column;min-width:0;"><span style="font-size:12px;color:#6b7280;">' + escapeHtml(label) + '</span><strong style="font-size:15px;color:#111827;">' + formatPrice(price, currency) + '</strong></span>' +
+        '<span style="display:flex;flex-direction:column;min-width:0;"><span style="font-size:12px;color:#6b7280;">' + escapeHtml(label) + '</span><strong style="font-size:15px;color:#111827;">' + formatPrice(price, 'EUR') + '</strong></span>' +
         '<span style="padding:7px 10px;border-radius:9px;background:#16a34a;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;">View offer ↗</span></a>';
     }).join('') +
     '</div></div>';
