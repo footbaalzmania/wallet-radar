@@ -118,9 +118,8 @@ function getOpenBoxOffer(product) {
 `    try {
       const requestUrl = new URL(`,
 `    try {
-      // Reload the persisted price data before every request. The price collectors
-      // run asynchronously after startup, so the original in-memory snapshot can
-      // otherwise become stale and hide newly collected Idealo/Heureka/Amazon data.
+      // Reload persisted price data before every request so asynchronous collectors
+      // such as Idealo are visible without restarting the Node process.
       try {
         const freshProducts = JSON.parse(fs.readFileSync(productsPath, "utf8"));
         if (Array.isArray(freshProducts)) products = freshProducts;
@@ -142,8 +141,35 @@ function getOpenBoxOffer(product) {
 
   const marketOffersFunction = `
 function renderMarketOffers(product) {
-  const standard = getMarketOffers(product).find((offer) => String(offer.store || '').toLowerCase() === 'idealo') || null;
-  const openBox = getOpenBoxOffer(product);
+  const allOffers = Array.isArray(product?.offers) ? product.offers : [];
+
+  const isIdealo = (offer) => {
+    const store = String(offer?.store || '').trim().toLowerCase();
+    return store === 'idealo' || store === 'idealo open box' || store.startsWith('idealo ');
+  };
+
+  const priceValue = (offer) => {
+    if (Number.isFinite(Number(offer?.priceCzk))) return Number(offer.priceCzk);
+    if (Number.isFinite(Number(offer?.price))) return Number(offer.price);
+    return null;
+  };
+
+  const idealoOffers = allOffers
+    .filter((offer) => isIdealo(offer) && priceValue(offer) !== null)
+    .sort((a, b) => priceValue(a) - priceValue(b));
+
+  if (!idealoOffers.length) return '';
+
+  const standard = idealoOffers.find((offer) => {
+    const store = String(offer?.store || '').trim().toLowerCase();
+    return store === 'idealo' && offer?.condition !== 'open-box';
+  }) || idealoOffers.find((offer) => offer?.condition !== 'open-box') || null;
+
+  const openBox = idealoOffers.find((offer) => {
+    const store = String(offer?.store || '').trim().toLowerCase();
+    return store === 'idealo open box' || offer?.condition === 'open-box';
+  }) || null;
+
   const offers = [standard, openBox].filter(Boolean);
   if (!offers.length) return '';
 
@@ -155,11 +181,14 @@ function renderMarketOffers(product) {
     '</div>' +
     '<div style="display:grid;gap:8px;">' +
     offers.map((offer) => {
-      const isOpenBox = String(offer.store || '').toLowerCase() === 'idealo open box' || offer.condition === 'open-box';
-      const price = Number.isFinite(Number(offer.priceCzk)) ? Number(offer.priceCzk) : Number(offer.price);
-      const currency = Number.isFinite(Number(offer.priceCzk)) ? 'CZK' : (offer.currency || 'CZK');
+      const store = String(offer?.store || '').trim().toLowerCase();
+      const isOpenBox = store === 'idealo open box' || offer?.condition === 'open-box';
+      const price = priceValue(offer);
+      const currency = Number.isFinite(Number(offer?.priceCzk)) ? 'CZK' : (offer?.currency || 'CZK');
       const label = isOpenBox ? 'Idealo · Open-box' : 'Idealo · New';
-      return '<a href="' + escapeHtml(offer.url || offer.affiliateUrl || '#') + '" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;text-decoration:none;color:inherit;">' +
+      const url = offer?.url || offer?.affiliateUrl || 'https://www.idealo.de/';
+
+      return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;text-decoration:none;color:inherit;">' +
         '<span style="display:flex;flex-direction:column;min-width:0;"><span style="font-size:12px;color:#6b7280;">' + escapeHtml(label) + '</span><strong style="font-size:15px;color:#111827;">' + formatPrice(price, currency) + '</strong></span>' +
         '<span style="padding:7px 10px;border-radius:9px;background:#16a34a;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;">View offer ↗</span></a>';
     }).join('') +
@@ -171,10 +200,12 @@ function renderMarketOffers(product) {
     source = source.replace('function renderWalletCard(product) {', marketOffersFunction + '\nfunction renderWalletCard(product) {');
   }
 
-  source = source.replace(
-    '        <div class="wallet-actions">',
-    '        ' + '${renderMarketOffers(product)}' + '\n\n        <div class="wallet-actions">'
-  );
+  if (!source.includes('${renderMarketOffers(product)}')) {
+    source = source.replace(
+      '        <div class="wallet-actions">',
+      '        ${renderMarketOffers(product)}\n\n        <div class="wallet-actions">'
+    );
+  }
 
   return module._compile(source, filename);
 };
