@@ -7,7 +7,12 @@ const path = require("path");
   Sources:
   - Alza: refreshed by server.js every 6 hours.
   - Heureka: refreshed here every 6 hours.
-  - Amazon.de: refreshed here every 6 hours where Amazon exposes a readable price.
+  - Amazon.de: refreshed here every 6 hours where a readable price is available.
+
+  Railway/datacenter IPs can receive anti-bot 403/503 responses from retail sites.
+  For those sources we first use Jina Reader as a lightweight HTML-to-text proxy,
+  then fall back to a direct request. The proxy URL can be overridden with
+  PRICE_READER_BASE_URL.
 
   Currency handling:
   - Every offer keeps its original price + currency.
@@ -18,6 +23,7 @@ const path = require("path");
 const productsPath = path.join(__dirname, "products.json");
 const INTERVAL_MS = 6 * 60 * 60 * 1000;
 const ECB_EUR_CZK_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
+const PRICE_READER_BASE_URL = String(process.env.PRICE_READER_BASE_URL || "https://r.jina.ai/").replace(/\/+$/, "") + "/";
 
 const HEUREKA_PRODUCTS = {
   "trezor-safe-3": { name: "Trezor Safe 3", url: "https://hardwarove-penezenky-a-trezory.heureka.cz/trezor-safe-3-stellar-silver/" },
@@ -53,6 +59,35 @@ function stripHtml(html) {
     .replace(/&#39;/gi, "'").replace(/&#x27;/gi, "'").replace(/\s+/g, " ").trim();
 }
 
+async function fetchText(url, headers = {}) {
+  const readerUrl = PRICE_READER_BASE_URL + url;
+
+  try {
+    const response = await fetch(readerUrl, {
+      headers: {
+        "User-Agent": "CryptoWalletRadar/1.0",
+        Accept: "text/plain,text/html;q=0.9,*/*;q=0.8",
+        ...headers,
+      },
+    });
+    if (response.ok) return await response.text();
+    console.log(`Reader returned HTTP ${response.status}; trying direct source`);
+  } catch (err) {
+    console.log(`Reader request failed (${err.message}); trying direct source`);
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; CryptoWalletRadar/1.0; +https://cryptowalletradar.com)",
+      Accept: "text/html,application/xhtml+xml",
+      ...headers,
+    },
+  });
+
+  if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
+  return await response.text();
+}
+
 async function fetchEurCzkRate() {
   try {
     const response = await fetch(ECB_EUR_CZK_URL, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CryptoWalletRadar/1.0; +https://cryptowalletradar.com)", Accept: "application/xml,text/xml;q=0.9,*/*;q=0.8" } });
@@ -82,9 +117,8 @@ function extractHeurekaPrice(text) {
 }
 
 async function fetchHeurekaPrice(config) {
-  const response = await fetch(config.url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CryptoWalletRadar/1.0; +https://cryptowalletradar.com)", Accept: "text/html,application/xhtml+xml", "Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.8" } });
-  if (!response.ok) throw new Error(`Heureka returned HTTP ${response.status}`);
-  return extractHeurekaPrice(stripHtml(await response.text()));
+  const html = await fetchText(config.url, { "Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.8" });
+  return extractHeurekaPrice(stripHtml(html));
 }
 
 async function updateHeurekaOffers(products) {
@@ -113,13 +147,15 @@ async function updateHeurekaOffers(products) {
 }
 
 function extractAmazonPrice(text, productName) {
+  const source = String(text || "");
   const escaped = productName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const patterns = [
-    new RegExp(escaped + "[\\s\\S]{0,500}?([0-9]{1,3}(?:[.,][0-9]{2})?)\\s*€", "i"),
-    new RegExp("([0-9]{1,3}(?:[.,][0-9]{2})?)\\s*€[\\s\\S]{0,500}?" + escaped, "i"),
+    new RegExp(escaped + "[\\s\\S]{0,800}?([0-9]{1,3}(?:[.,][0-9]{2})?)\\s*€", "i"),
+    new RegExp("([0-9]{1,3}(?:[.,][0-9]{2})?)\\s*€[\\s\\S]{0,800}?" + escaped, "i"),
+    /(?:Preis|price)[\s:]*([0-9]{1,3}(?:[.,][0-9]{2})?)\s*€/i,
   ];
   for (const pattern of patterns) {
-    const match = String(text || "").match(pattern);
+    const match = source.match(pattern);
     if (!match) continue;
     const price = Number(String(match[1]).replace(/\./g, "").replace(",", "."));
     if (Number.isFinite(price) && price > 0) return price;
@@ -128,9 +164,8 @@ function extractAmazonPrice(text, productName) {
 }
 
 async function fetchAmazonPrice(config) {
-  const response = await fetch(config.searchUrl, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CryptoWalletRadar/1.0; +https://cryptowalletradar.com)", Accept: "text/html,application/xhtml+xml", "Accept-Language": "de-DE,de;q=0.9,en;q=0.8" } });
-  if (!response.ok) throw new Error(`Amazon returned HTTP ${response.status}`);
-  return extractAmazonPrice(stripHtml(await response.text()), config.name);
+  const html = await fetchText(config.searchUrl, { "Accept-Language": "de-DE,de;q=0.9,en;q=0.8" });
+  return extractAmazonPrice(stripHtml(html), config.name);
 }
 
 async function updateAmazonOffers(products, eurCzkRate) {
@@ -165,16 +200,12 @@ function restoreRuntimeNormalizedValues(products) {
   for (const product of products) {
     for (const offer of Array.isArray(product.offers) ? product.offers : []) {
       if (String(offer.originalCurrency || "").toUpperCase() === "EUR" && Number.isFinite(Number(offer.originalPrice))) {
-        offer.price = Number(offer.originalPrice);
-        offer.currency = "EUR";
-        changed = true;
+        offer.price = Number(offer.originalPrice); offer.currency = "EUR"; changed = true;
       }
     }
     for (const entry of Array.isArray(product.priceHistory) ? product.priceHistory : []) {
       if (String(entry.originalCurrency || "").toUpperCase() === "EUR" && Number.isFinite(Number(entry.originalPrice))) {
-        entry.price = Number(entry.originalPrice);
-        entry.currency = "EUR";
-        changed = true;
+        entry.price = Number(entry.originalPrice); entry.currency = "EUR"; changed = true;
       }
     }
   }
