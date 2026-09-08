@@ -4,7 +4,7 @@
   "private": true,
   "description": "Hardware wallet price radar",
   "scripts": {
-    "start": "node -r ./price-reader-fix.js -r ./trezor-api-fix.js -r ./price-history.js -r ./currency-runtime.js -r ./wallet-radar-layout.js server.js"
+    "start": "node -r ./price-reader-fix.js -r ./trezor-api-fix.js -r ./price-history.js -r ./idealo-price-source.js -r ./currency-runtime.js -r ./wallet-radar-layout.js server.js"
   },
   "engines": {
     "node": ">=20"
