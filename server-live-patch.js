@@ -6,7 +6,6 @@ Module._extensions['.js'] = function(module, filename) {
   if (!filename.endsWith('/server.js')) return original(module, filename);
 
   let source = fs.readFileSync(filename, 'utf8');
-
   const EUR_RATE_FALLBACK = 24.8;
 
   const marketHelpers = `
@@ -14,17 +13,11 @@ function marketPriceEur(offer) {
   if (!offer) return null;
   const originalCurrency = String(offer.originalCurrency || '').toUpperCase();
   const currency = String(offer.currency || '').toUpperCase();
-
   if (originalCurrency === 'EUR' && Number.isFinite(Number(offer.originalPrice))) return Number(offer.originalPrice);
   if (currency === 'EUR' && Number.isFinite(Number(offer.price))) return Number(offer.price);
-  if (Number.isFinite(Number(offer.priceCzk))) {
-    const rate = Number(offer.exchangeRate) || EUR_RATE_FALLBACK;
-    return Number(offer.priceCzk) / rate;
-  }
-  if (currency === 'CZK' && Number.isFinite(Number(offer.price))) {
-    const rate = Number(offer.exchangeRate) || EUR_RATE_FALLBACK;
-    return Number(offer.price) / rate;
-  }
+  const rate = Number(offer.exchangeRate) || EUR_RATE_FALLBACK;
+  if (Number.isFinite(Number(offer.priceCzk))) return Number(offer.priceCzk) / rate;
+  if (currency === 'CZK' && Number.isFinite(Number(offer.price))) return Number(offer.price) / rate;
   return Number.isFinite(Number(offer.price)) ? Number(offer.price) : null;
 }
 
@@ -41,8 +34,7 @@ function getOpenBoxOffer(product) {
 `;
 
   const replacements = [
-    [
-`function getMarketOffers(product) {
+    [`function getMarketOffers(product) {
   if (!product || !Array.isArray(product.offers)) {
     return [];
   }
@@ -54,7 +46,6 @@ function getOpenBoxOffer(product) {
 marketHelpers + `
 function getMarketOffers(product) {
   if (!product || !Array.isArray(product.offers)) return [];
-
   return product.offers
     .filter((offer) => {
       if (!Number.isFinite(Number(offer.price))) return false;
@@ -62,10 +53,8 @@ function getMarketOffers(product) {
       return store !== 'idealo open box' && offer.condition !== 'open-box';
     })
     .sort((a, b) => marketPriceEur(a) - marketPriceEur(b));
-}`
-    ],
-    [
-`function getLowestMarketPrice(product) {
+}`],
+    [`function getLowestMarketPrice(product) {
   const offers = getMarketOffers(product);
 
   if (!offers.length) {
@@ -77,10 +66,8 @@ function getMarketOffers(product) {
 `function getLowestMarketPrice(product) {
   const offers = getMarketOffers(product);
   return offers.length ? marketPriceEur(offers[0]) : null;
-}`
-    ],
-    [
-`function getMarketCurrency(product) {
+}`],
+    [`function getMarketCurrency(product) {
   const offers = getMarketOffers(product);
 
   if (offers.length && offers[0].currency) {
@@ -91,18 +78,14 @@ function getMarketOffers(product) {
 }`,
 `function getMarketCurrency(product) {
   return "EUR";
-}`
-    ],
-    [
-`function getOfficialPriceCurrency(product) {
+}`],
+    [`function getOfficialPriceCurrency(product) {
   return product?.officialPriceCurrency || product?.currency || "CZK";
 }`,
 `function getOfficialPriceCurrency(product) {
   return "EUR";
-}`
-    ],
-    [
-`function getBestOffer(product) {
+}`],
+    [`function getBestOffer(product) {
   const offers = getMarketOffers(product);
 
   if (!offers.length) {
@@ -116,10 +99,8 @@ function getMarketOffers(product) {
   if (!offers.length) return null;
   const offer = offers[0];
   return { ...offer, price: marketPriceEur(offer), currency: "EUR" };
-}`
-    ],
-    [
-`function getPriceHistory(product) {
+}`],
+    [`function getPriceHistory(product) {
   if (!product || !Array.isArray(product.priceHistory)) {
     return [];
   }
@@ -137,47 +118,40 @@ function getMarketOffers(product) {
 }`,
 `function getPriceHistory(product) {
   if (!product || !Array.isArray(product.priceHistory)) return [];
-
   return product.priceHistory
     .filter((item) => item && Number.isFinite(Number(item.price)) && item.date)
     .map((item) => {
       const currency = String(item.currency || product.currency || "CZK").toUpperCase();
       let price = Number(item.price);
+      const rate = Number(item.exchangeRate) || EUR_RATE_FALLBACK;
       if (currency === "EUR") price = Number(item.originalPrice ?? item.price);
-      else if (Number.isFinite(Number(item.priceCzk))) price = Number(item.priceCzk) / (Number(item.exchangeRate) || EUR_RATE_FALLBACK);
-      else if (currency === "CZK") price = price / (Number(item.exchangeRate) || EUR_RATE_FALLBACK);
+      else if (Number.isFinite(Number(item.priceCzk))) price = Number(item.priceCzk) / rate;
+      else if (currency === "CZK") price = price / rate;
       return { ...item, price, currency: "EUR" };
     })
     .filter((item) => Number.isFinite(item.price) && item.price > 0)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-}`
-    ]
+}`]
   ];
 
   for (const [oldText, newText] of replacements) {
-    if (!source.includes(oldText)) {
-      console.warn('WalletRadar patch: target not found');
-    } else {
-      source = source.replace(oldText, newText);
-    }
+    if (source.includes(oldText)) source = source.replace(oldText, newText);
+    else console.warn('WalletRadar patch: target not found');
   }
 
-  const oldRenderStart = 'function renderWalletCard(product) {';
-  const oldRenderEnd = '\nfunction renderHome() {';
-  const renderStart = source.indexOf(oldRenderStart);
-  const renderEnd = source.indexOf(oldRenderEnd, renderStart);
-
+  // Replace the complete wallet card renderer so the EUR display and Idealo block
+  // are independent of the original server renderer.
+  const renderStart = source.indexOf('function renderWalletCard(product) {');
+  const renderEnd = source.indexOf('\nfunction renderHome() {', renderStart);
   if (renderStart !== -1 && renderEnd !== -1) {
-    const newRenderWalletCard = `function renderWalletCard(product) {
+    const newRenderer = `function renderWalletCard(product) {
   const officialPrice = getOfficialPrice(product);
-  const officialCurrency = getOfficialPriceCurrency(product);
   const marketPrice = getLowestMarketPrice(product);
-  const marketCurrency = getMarketCurrency(product);
   const score = getDealScore(product);
   const status = getDealStatus(score);
   const bestOffer = getBestOffer(product);
-
   const eur = (value) => Number.isFinite(Number(value)) ? formatPrice(Number(value), 'EUR') : '—';
+
   const image = product.image ? \`
     <a href="/go/\${escapeHtml(product.slug)}" class="wallet-image" aria-label="Buy \${escapeHtml(product.name)} at Trezor">
       <img src="\${escapeHtml(product.image)}" alt="\${escapeHtml(product.name)}" loading="lazy">
@@ -194,7 +168,6 @@ function getMarketOffers(product) {
     const store = String(offer.store || '').toLowerCase();
     return store === 'idealo' && offer.condition !== 'open-box';
   }) || null;
-
   const openBoxOffer = idealoOffers.find((offer) => {
     const store = String(offer.store || '').toLowerCase();
     return store === 'idealo open box' || offer.condition === 'open-box';
@@ -223,7 +196,6 @@ function getMarketOffers(product) {
   const scoreHtml = score === null
     ? '<span class="deal-badge">Building price history</span>'
     : '<span class="deal-badge">' + escapeHtml(status) + '</span><span class="deal-score">' + score + '/100</span>';
-
   const bestOfferText = bestOffer ? 'Best market offer: ' + eur(bestOffer.price) : 'Market offers are being added';
 
   return \`
@@ -249,13 +221,11 @@ function getMarketOffers(product) {
   \`;
 }
 `;
-
-    source = source.slice(0, renderStart) + newRenderWalletCard + source.slice(renderEnd + 1);
+    source = source.slice(0, renderStart) + newRenderer + source.slice(renderEnd + 1);
   } else {
-    console.warn('WalletRadar patch: renderWalletCard boundaries not found');
+    console.error('WalletRadar patch: renderWalletCard boundaries not found');
   }
 
-  // Refresh persisted collector data on each request.
   const requestMarker = '    try {\n      const requestUrl = new URL(';
   if (source.includes(requestMarker)) {
     source = source.replace(requestMarker, `    try {\n      try {\n        const freshProducts = JSON.parse(fs.readFileSync(productsPath, "utf8"));\n        if (Array.isArray(freshProducts)) products = freshProducts;\n      } catch (refreshErr) {\n        console.error("Live products refresh failed:", refreshErr.message);\n      }\n\n      const requestUrl = new URL(`);
