@@ -49,12 +49,13 @@ function extractProductPrice(text, config) {
   const productIndex = source.toLowerCase().indexOf(config.name.toLowerCase());
   if (productIndex < 0) return null;
 
-  // The reliable Idealo product-summary format is:
-  //   ## 3 Varianten ab 119,00 €
-  // Keep the search very close to the product heading and only accept the
-  // first summary price. This avoids later offer prices from being selected.
+  // Jina may return the product heading with the heading marker immediately
+  // before the product name. Because we start searching at the product name,
+  // requiring a line-start would incorrectly reject the real summary price.
+  // The first 500 chars after the product heading are limited to the product
+  // summary, preventing unrelated "Top 10" prices later in the page.
   const section = source.slice(productIndex, productIndex + 500);
-  const match = section.match(/(?:^|\n)#+\s*[^\n]*\bab\s+([0-9]{1,3}(?:[.,][0-9]{2})?)\s*€/i);
+  const match = section.match(/#+\s*[^\n]*?\bab\s+([0-9]{1,3}(?:[.,][0-9]{2})?)\s*€/i);
   if (!match) return null;
 
   const price = Number(String(match[1]).replace(",", "."));
