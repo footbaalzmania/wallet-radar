@@ -53,8 +53,7 @@ function extractMoney(text) {
   while ((match = re.exec(normalized))) {
     const currency = (match[1] || match[5] || "").toUpperCase();
     const raw = match[2] || match[4] || "";
-    const normalizedNumber = raw.replace(/[ .]/g, "").replace(",", ".");
-    const price = Number(normalizedNumber);
+    const price = Number(raw.replace(/[ .]/g, "").replace(",", "."));
     if (!Number.isFinite(price)) continue;
 
     if ((currency === "EUR" || currency === "€") && price >= 20 && price <= 1000) {
@@ -77,6 +76,36 @@ function findPriceNearProduct(text, productName) {
   while (from !== -1) {
     const candidate = prices.find((item) => item.index >= from && item.index <= from + 2500);
     if (candidate) return candidate;
+    from = lower.indexOf(needle, from + needle.length);
+  }
+
+  return null;
+}
+
+function findRawPriceNearProduct(text, productName) {
+  const lower = String(text || "").toLowerCase();
+  const needle = productName.toLowerCase();
+  let from = lower.indexOf(needle);
+
+  while (from !== -1) {
+    const window = String(text).slice(from, from + 12000);
+    const patterns = [
+      /"price"\s*:\s*"?(\d+(?:[.,]\d+)?)"?/i,
+      /"amount"\s*:\s*"?(\d+(?:[.,]\d+)?)"?/i,
+      /(\d+(?:[.,]\d+)?)\s*(?:EUR|€)/i,
+      /(?:EUR|€)\s*(\d+(?:[.,]\d+)?)/i,
+      /(\d{3,5})\s*(?:CZK|Kč)/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = window.match(pattern);
+      if (!match) continue;
+      const price = Number(match[1].replace(",", "."));
+      if (!Number.isFinite(price)) continue;
+      if (window.match(/(?:EUR|€)/i) && price >= 20 && price <= 1000) return { price, currency: "EUR" };
+      if (price >= 500 && price <= 20_000) return { price, currency: "CZK" };
+    }
+
     from = lower.indexOf(needle, from + needle.length);
   }
 
@@ -137,11 +166,12 @@ async function updateOfficialPrices() {
     if (!product) continue;
 
     try {
-      let result = sourceText ? findPriceNearProduct(sourceText, config.name) : null;
+      let result = sourceText ? findRawPriceNearProduct(sourceText, config.name) : null;
+      if (!result && sourceText) result = findPriceNearProduct(sourceText, config.name);
 
       if (!result) {
         const raw = await fetchBest(`https://trezor.io/cs/${slug}`);
-        result = findPriceNearProduct(raw, config.name);
+        result = findRawPriceNearProduct(raw, config.name) || findPriceNearProduct(raw, config.name);
       }
 
       if (!result) {
