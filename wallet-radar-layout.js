@@ -66,10 +66,12 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
           const updatedWalletGrid = extractElement(html, updatedWalletsStart);
 
           if (updatedWalletGrid) {
-            const radarCard = heroCard.html.replace(
-              'class="hero-card"',
-              'class="hero-card wallets-deal-radar"'
-            );
+            const radarCard = heroCard.html
+              .replace(
+                'class="hero-card"',
+                'class="hero-card wallets-deal-radar"'
+              )
+              .replace(/\\sCZK\\b/g, " €");
 
             const insertion = `\n\n          ${radarCard}`;
             const insertionPoint = updatedWalletGrid.end;
