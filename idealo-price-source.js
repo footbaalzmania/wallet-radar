@@ -46,21 +46,25 @@ function extractProductPrice(text, config) {
     .replace(/[\u00a0\u202f]/g, " ")
     .replace(/\r/g, "");
 
-  const productIndex = source.toLowerCase().indexOf(config.name.toLowerCase());
+  const lower = source.toLowerCase();
+  const productIndex = lower.indexOf(config.name.toLowerCase());
   if (productIndex < 0) return null;
 
-  // Jina may return the product heading with the heading marker immediately
-  // before the product name. Because we start searching at the product name,
-  // requiring a line-start would incorrectly reject the real summary price.
-  // The first 500 chars after the product heading are limited to the product
-  // summary, preventing unrelated "Top 10" prices later in the page.
-  const section = source.slice(productIndex, productIndex + 500);
-  const match = section.match(/#+\s*[^\n]*?\bab\s+([0-9]{1,3}(?:[.,][0-9]{2})?)\s*€/i);
-  if (!match) return null;
+  // Idealo/Jina can flatten Markdown headings and line breaks differently.
+  // Therefore don't require a specific heading syntax. The product summary
+  // appears immediately after the first product heading and contains "ab X €".
+  // Limit the window so later recommendation/"Top 10" prices cannot win.
+  const section = source.slice(productIndex, productIndex + 1200);
+  const matches = [...section.matchAll(/\bab\s+([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/gi)];
 
-  const price = Number(String(match[1]).replace(",", "."));
-  if (!Number.isFinite(price) || price < config.min || price > config.max) return null;
-  return price;
+  for (const match of matches) {
+    const price = Number(String(match[1]).replace(",", "."));
+    if (Number.isFinite(price) && price >= config.min && price <= config.max) {
+      return price;
+    }
+  }
+
+  return null;
 }
 
 async function fetchReader(url) {
