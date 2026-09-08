@@ -43,62 +43,65 @@ function extractIdealoPrices(text, config) {
   if (!section) return { standard: null, openBox: null };
 
   const priceRegex = /([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/g;
+  const pricesIn = (text) => [...String(text || "").matchAll(priceRegex)]
+    .map((m) => parsePrice(m[1]))
+    .filter((p) => validPrice(p, config));
+
   let standardCandidates = [];
   let openBoxCandidates = [];
-
-  // Prefer actual offer blocks. Jina's flattened Idealo page can put an
-  // open-box price into the product summary, so "Varianten ab" is not used
-  // as the primary source. Instead, find product-name occurrences and inspect
-  // the nearby text for the offer price and the open-box marker.
   const escapedName = config.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const productNameRegex = new RegExp(escapedName, "gi");
+
   for (const match of section.matchAll(productNameRegex)) {
-    const start = match.index;
-    const block = section.slice(start, Math.min(section.length, start + 1200));
-    const isOpenBox = /geöffnete?r?\s+Verpackung/i.test(block.slice(0, 700));
-    const prices = [...block.matchAll(priceRegex)]
-      .map((m) => parsePrice(m[1]))
-      .filter((p) => validPrice(p, config));
-    if (!prices.length) continue;
-    const price = prices[0];
-    if (isOpenBox) openBoxCandidates.push(price);
-    else standardCandidates.push(price);
+    const block = section.slice(match.index, Math.min(section.length, match.index + 1400));
+    const openMarker = /geöffn(?:ete?r?|te)\s+Verpackung/i.test(block);
+    const blockPrices = pricesIn(block);
+    if (!blockPrices.length) continue;
+    if (openMarker) openBoxCandidates.push(blockPrices[0]);
+    else standardCandidates.push(blockPrices[0]);
   }
 
-  // Fallback for pages whose offer titles were flattened away.
-  if (!standardCandidates.length || !openBoxCandidates.length) {
-    const allPrices = [...section.matchAll(priceRegex)]
-      .map((m) => parsePrice(m[1]))
-      .filter((p) => validPrice(p, config));
-    const openBoxMatch = /geöffnete?r?\s+Verpackung/i.exec(section);
-    if (openBoxMatch && !openBoxCandidates.length) {
-      const before = section.slice(Math.max(0, openBoxMatch.index - 700), openBoxMatch.index);
-      const beforePrices = [...before.matchAll(priceRegex)]
-        .map((m) => parsePrice(m[1]))
-        .filter((p) => validPrice(p, config));
-      if (beforePrices.length) openBoxCandidates.push(beforePrices[beforePrices.length - 1]);
-    }
-    if (!standardCandidates.length) {
-      const openBox = openBoxCandidates.length ? openBoxCandidates[0] : null;
-      const candidates = allPrices.filter((p) => p !== openBox);
-      if (candidates.length) standardCandidates.push(Math.min(...candidates));
-    }
+  // Important: on the flattened Jina/Idealo page the open-box title is
+  // followed by its price. The previous parser looked before the marker,
+  // so it missed the 109 EUR open-box price and accepted it as standard.
+  const openMarkerMatch = /geöffn(?:ete?r?|te)\s+Verpackung/i.exec(section);
+  let openBox = openBoxCandidates.length ? Math.min(...openBoxCandidates) : null;
+  if (!Number.isFinite(openBox) && openMarkerMatch) {
+    const nearby = section.slice(openMarkerMatch.index, openMarkerMatch.index + 500);
+    const nearbyPrices = pricesIn(nearby);
+    if (nearbyPrices.length) openBox = nearbyPrices[0];
   }
 
-  const openBox = openBoxCandidates.length ? Math.min(...openBoxCandidates) : null;
+  // Once open-box is known, search forward for the first normal offer that
+  // is more expensive than open-box. For Safe 5 this is 119 EUR after 109 EUR.
+  if (!standardCandidates.length && openMarkerMatch && Number.isFinite(openBox)) {
+    const after = section.slice(openMarkerMatch.index + openMarkerMatch[0].length);
+    const candidates = pricesIn(after).filter((p) => p > openBox);
+    if (candidates.length) standardCandidates.push(Math.min(...candidates));
+  }
+
   let standard = standardCandidates.length ? Math.min(...standardCandidates) : null;
 
-  // Never allow an identified open-box price to become the standard price.
+  // If an offer-title scan accidentally classified the same price as both,
+  // explicitly remove the open-box value and find the next normal price.
   if (Number.isFinite(openBox) && standard === openBox) {
-    const candidates = standardCandidates.filter((p) => p !== openBox);
-    standard = candidates.length ? Math.min(...candidates) : null;
+    const all = pricesIn(section).filter((p) => p !== openBox);
+    standard = all.length ? Math.min(...all) : null;
   }
 
-  // Last fallback: the normal summary, but only if it is not the open-box price.
+  // Fallback only when no normal offer was found. Never accept the summary
+  // price if it equals the identified open-box price.
   if (!Number.isFinite(standard)) {
     const summary = section.match(/\b(?:\d+\s+)?Varianten\s+ab\s+([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/i);
     const summaryPrice = summary ? parsePrice(summary[1]) : null;
     if (validPrice(summaryPrice, config) && summaryPrice !== openBox) standard = summaryPrice;
+  }
+
+  // Last bounded fallback: minimum valid price in the product section,
+  // excluding the identified open-box value.
+  if (!Number.isFinite(standard)) {
+    const all = pricesIn(section).filter((p) => !Number.isFinite(openBox) || p !== openBox);
+    if (all.length) standard = Math.min(...all);
   }
 
   return {
@@ -150,8 +153,7 @@ async function updateIdealo() {
     const product = products.find((item) => item.slug === slug);
     if (!product) continue;
     try {
-      const text = await fetchReader(config.url);
-      const prices = extractIdealoPrices(text, config);
+      const prices = extractIdealoPrices(await fetchReader(config.url), config);
       const standardCzk = Number.isFinite(eurCzkRate) && Number.isFinite(prices.standard) ? Math.round(prices.standard * eurCzkRate * 100) / 100 : null;
       const openBoxCzk = Number.isFinite(eurCzkRate) && Number.isFinite(prices.openBox) ? Math.round(prices.openBox * eurCzkRate * 100) / 100 : null;
       if (!Number.isFinite(prices.standard)) console.log(`Idealo: ${config.name} standard price not found`);
