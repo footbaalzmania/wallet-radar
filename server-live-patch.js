@@ -98,7 +98,20 @@ function getOpenBoxOffer(product) {
 }`,
 `function getBestOffer(product) {
   const offers = getMarketOffers(product);
-  return offers.length ? offers[0] : null;
+  if (!offers.length) return null;
+
+  const offer = offers[0];
+  const priceCzk = Number.isFinite(Number(offer.priceCzk)) ? Number(offer.priceCzk) : Number(offer.price);
+  const openBox = getOpenBoxOffer(product);
+
+  return {
+    ...offer,
+    price: priceCzk,
+    currency: "CZK",
+    store: openBox
+      ? (offer.store || "market") + " · open-box " + (Number.isFinite(Number(openBox.priceCzk)) ? Math.round(Number(openBox.priceCzk)) : Number(openBox.price)) + " CZK"
+      : (offer.store || "market")
+  };
 }`
     ],
     [
