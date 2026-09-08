@@ -70,20 +70,33 @@ function extractIdealoPrices(text, config) {
   const section = findProductSection(source, config);
   if (!section) return { standard: null, openBox: null };
 
-  // The standard product summary is explicitly marked by "Varianten ab X €".
-  // This avoids accidentally selecting a cheaper open-box offer that appears
-  // before the normal new-product offer in Idealo/Jina's flattened text.
+  // Idealo/Jina can flatten an open-box offer into the product summary and
+  // report e.g. "Varianten ab 109 €", even though the actual new-product
+  // offer is 119 €. Detect the open-box price first and never accept it as
+  // the standard price.
   const summary = section.match(/\b(?:\d+\s+)?Varianten\s+ab\s+([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/i);
-  const standard = summary ? parsePrice(summary[1]) : null;
+  let standard = summary ? parsePrice(summary[1]) : null;
 
   let openBox = null;
   const openBoxMatch = /geöffnete?r?\s+Verpackung/i.exec(section);
   if (openBoxMatch) {
     const before = section.slice(Math.max(0, openBoxMatch.index - 700), openBoxMatch.index);
-    const prices = [...before.matchAll(/([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/g)]
+    const pricesBefore = [...before.matchAll(/([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/g)]
       .map((match) => parsePrice(match[1]))
       .filter((price) => validPrice(price, config));
-    if (prices.length) openBox = prices[prices.length - 1];
+    if (pricesBefore.length) openBox = pricesBefore[pricesBefore.length - 1];
+
+    // If the summary itself points at the open-box price, look forward to
+    // the first valid offer price after the open-box listing. On Idealo this
+    // is the normal new-product offer (currently 119 € for Safe 5).
+    if (Number.isFinite(openBox) && Number.isFinite(standard) && standard === openBox) {
+      const after = section.slice(openBoxMatch.index + openBoxMatch[0].length);
+      const pricesAfter = [...after.matchAll(/([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/g)]
+        .map((match) => parsePrice(match[1]))
+        .filter((price) => price !== openBox && validPrice(price, config));
+      if (pricesAfter.length) standard = pricesAfter[0];
+      else standard = null;
+    }
   }
 
   return {
