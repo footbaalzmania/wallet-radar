@@ -149,8 +149,8 @@ function renderMarketOffers(product) {
 
   return '<div class="market-offers" style="margin-top:16px;padding:14px;border:1px solid #d7f2df;border-radius:16px;background:linear-gradient(135deg,#f3fff7,#ffffff);">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px;">' +
-      '<div><div style="font-size:12px;font-weight:900;color:#111827;letter-spacing:.08em;text-transform:uppercase;">Ceny z Idealo</div>' +
-      '<div style="font-size:11px;color:#15803d;margin-top:3px;">Nejlepší nabídky z idealo.de</div></div>' +
+      '<div><div style="font-size:12px;font-weight:900;color:#111827;letter-spacing:.08em;text-transform:uppercase;">Idealo Prices</div>' +
+      '<div style="font-size:11px;color:#15803d;margin-top:3px;">Best offers from idealo.de</div></div>' +
       '<span style="font-size:11px;font-weight:900;color:#111827;">idealo</span>' +
     '</div>' +
     '<div style="display:grid;gap:8px;">' +
@@ -158,10 +158,10 @@ function renderMarketOffers(product) {
       const isOpenBox = String(offer.store || '').toLowerCase() === 'idealo open box' || offer.condition === 'open-box';
       const price = Number.isFinite(Number(offer.priceCzk)) ? Number(offer.priceCzk) : Number(offer.price);
       const currency = Number.isFinite(Number(offer.priceCzk)) ? 'CZK' : (offer.currency || 'CZK');
-      const label = isOpenBox ? 'Idealo · rozbalené' : 'Idealo · nové';
+      const label = isOpenBox ? 'Idealo · Open-box' : 'Idealo · New';
       return '<a href="' + escapeHtml(offer.url || offer.affiliateUrl || '#') + '" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;text-decoration:none;color:inherit;">' +
         '<span style="display:flex;flex-direction:column;min-width:0;"><span style="font-size:12px;color:#6b7280;">' + escapeHtml(label) + '</span><strong style="font-size:15px;color:#111827;">' + formatPrice(price, currency) + '</strong></span>' +
-        '<span style="padding:7px 10px;border-radius:9px;background:#16a34a;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;">Zobrazit ↗</span></a>';
+        '<span style="padding:7px 10px;border-radius:9px;background:#16a34a;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;">View offer ↗</span></a>';
     }).join('') +
     '</div></div>';
 }
