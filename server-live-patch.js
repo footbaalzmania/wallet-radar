@@ -28,23 +28,6 @@ Module._extensions['.js'] = function(module, filename) {
       const bp = Number.isFinite(Number(b.priceCzk)) ? Number(b.priceCzk) : Number(b.price);
       return ap - bp;
     });
-}
-
-function getOpenBoxOffer(product) {
-  if (!product || !Array.isArray(product.offers)) return null;
-
-  const offers = product.offers.filter((offer) => {
-    const store = String(offer.store || '').toLowerCase();
-    return store === 'idealo open box' || offer.condition === 'open-box';
-  });
-
-  offers.sort((a, b) => {
-    const ap = Number.isFinite(Number(a.priceCzk)) ? Number(a.priceCzk) : Number(a.price);
-    const bp = Number.isFinite(Number(b.priceCzk)) ? Number(b.priceCzk) : Number(b.price);
-    return ap - bp;
-  });
-
-  return offers[0] || null;
 }`
     ],
     [
@@ -59,7 +42,6 @@ function getOpenBoxOffer(product) {
 }`,
 `function getLowestMarketPrice(product) {
   const offers = getMarketOffers(product);
-
   if (!offers.length) return null;
 
   const offer = offers[0];
@@ -111,9 +93,6 @@ function getOpenBoxOffer(product) {
 `    try {
       const requestUrl = new URL(`,
 `    try {
-      // Reload the persisted price data before every request. The price collectors
-      // run asynchronously after startup, so the original in-memory snapshot can
-      // otherwise become stale and hide newly collected Idealo/Heureka/Amazon data.
       try {
         const freshProducts = JSON.parse(fs.readFileSync(productsPath, "utf8"));
         if (Array.isArray(freshProducts)) products = freshProducts;
@@ -133,8 +112,6 @@ function getOpenBoxOffer(product) {
     }
   }
 
-  // Add a compact list of the best available market offers to every wallet card.
-  // This deliberately uses the lowest tracked price, including open-box offers.
   const helper = `
 function renderMarketOffers(product) {
   const offers = getMarketOffers(product)
@@ -143,25 +120,21 @@ function renderMarketOffers(product) {
 
   if (!offers.length) return "";
 
-  return ` + "`" + `
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e7eb;">
-      <div style="font-size:12px;font-weight:800;color:#6b7280;margin-bottom:9px;text-transform:uppercase;letter-spacing:.05em;">Best market offers</div>
-      <div style="display:grid;gap:7px;">
-        ${offers.map((offer) => {
-          const price = Number.isFinite(Number(offer.priceCzk)) ? Number(offer.priceCzk) : Number(offer.price);
-          const currency = Number.isFinite(Number(offer.priceCzk)) ? "CZK" : (offer.currency || "CZK");
-          const condition = offer.condition === "open-box" || String(offer.store || "").toLowerCase() === "idealo open box" ? " · open-box" : "";
-          const href = offer.url || offer.affiliateUrl || "#";
-          return ` + "`" + `
-            <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 10px;border:1px solid #e5e7eb;border-radius:9px;background:#fff;font-size:13px;">
-              <span style="font-weight:750;">${escapeHtml(offer.store || "Market")}${condition}</span>
-              <strong style="white-space:nowrap;">${formatPrice(price, currency)} ↗</strong>
-            </a>
-          ` + "`" + `;
-        }).join("")}
-      </div>
-    </div>
-  ` + "`" + `;
+  const rows = offers.map((offer) => {
+    const price = Number.isFinite(Number(offer.priceCzk)) ? Number(offer.priceCzk) : Number(offer.price);
+    const currency = Number.isFinite(Number(offer.priceCzk)) ? "CZK" : (offer.currency || "CZK");
+    const condition = offer.condition === "open-box" || String(offer.store || "").toLowerCase() === "idealo open box" ? " · open-box" : "";
+    const href = offer.url || offer.affiliateUrl || "#";
+    return '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener noreferrer" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 10px;border:1px solid #e5e7eb;border-radius:9px;background:#fff;font-size:13px;">' +
+      '<span style="font-weight:750;">' + escapeHtml(offer.store || "Market") + escapeHtml(condition) + '</span>' +
+      '<strong style="white-space:nowrap;">' + formatPrice(price, currency) + ' ↗</strong>' +
+      '</a>';
+  }).join("");
+
+  return '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e7eb;">' +
+    '<div style="font-size:12px;font-weight:800;color:#6b7280;margin-bottom:9px;text-transform:uppercase;letter-spacing:.05em;">Best market offers</div>' +
+    '<div style="display:grid;gap:7px;">' + rows + '</div>' +
+    '</div>';
 }
 `;
 
