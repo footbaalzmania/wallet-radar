@@ -42,20 +42,24 @@ function saveProducts(products) {
 }
 
 function extractProductPrice(text, config) {
-  const source = String(text || "").replace(/[\u00a0\u202f]/g, " ");
+  const source = String(text || "")
+    .replace(/[\u00a0\u202f]/g, " ")
+    .replace(/\r/g, "");
+
   const productIndex = source.toLowerCase().indexOf(config.name.toLowerCase());
   if (productIndex < 0) return null;
 
-  // Idealo places the product summary immediately after the title. Restrict
-  // parsing to that local region so dimensions/other unrelated prices cannot
-  // be mistaken for the product price.
-  const section = source.slice(productIndex, productIndex + 1200);
-  const matches = [...section.matchAll(/\bab\s+([0-9]{1,3}(?:[.,][0-9]{2})?)\s*€/gi)];
-  const prices = matches
-    .map((m) => Number(String(m[1]).replace(",", ".")))
-    .filter((n) => Number.isFinite(n) && n >= config.min && n <= config.max);
+  // The reliable Idealo product-summary format is:
+  //   ## 3 Varianten ab 119,00 €
+  // Keep the search very close to the product heading and only accept the
+  // first summary price. This avoids later offer prices from being selected.
+  const section = source.slice(productIndex, productIndex + 500);
+  const match = section.match(/(?:^|\n)#+\s*[^\n]*\bab\s+([0-9]{1,3}(?:[.,][0-9]{2})?)\s*€/i);
+  if (!match) return null;
 
-  return prices.length ? prices[0] : null;
+  const price = Number(String(match[1]).replace(",", "."));
+  if (!Number.isFinite(price) || price < config.min || price > config.max) return null;
+  return price;
 }
 
 async function fetchReader(url) {
@@ -83,7 +87,7 @@ async function updateIdealo() {
       const text = await fetchReader(config.url);
       const price = extractProductPrice(text, config);
       if (!Number.isFinite(price)) {
-        console.log(`Idealo: ${config.name} valid price not found`);
+        console.log(`Idealo: ${config.name} valid minimum price not found`);
         continue;
       }
 
