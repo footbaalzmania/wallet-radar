@@ -142,17 +142,21 @@ function getOpenBoxOffer(product) {
 
   const marketOffersFunction = `
 function renderMarketOffers(product) {
-  const offers = getMarketOffers(product).slice(0, 3);
+  const standard = getMarketOffers(product).filter((offer) => String(offer.store || '').toLowerCase() === 'idealo')[0] || null;
+  const openBox = getOpenBoxOffer(product);
+  const offers = [standard, openBox].filter(Boolean);
   if (!offers.length) return '';
 
   return '<div class="market-offers" style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e7eb;">' +
-    '<div style="font-size:12px;font-weight:800;color:#6b7280;margin-bottom:9px;text-transform:uppercase;letter-spacing:.05em;">Best market offers</div>' +
+    '<div style="font-size:12px;font-weight:800;color:#6b7280;margin-bottom:9px;text-transform:uppercase;letter-spacing:.05em;">Ceny z Idealo</div>' +
     '<div style="display:grid;gap:7px;">' +
     offers.map((offer) => {
+      const isOpenBox = String(offer.store || '').toLowerCase() === 'idealo open box' || offer.condition === 'open-box';
       const price = Number.isFinite(Number(offer.priceCzk)) ? Number(offer.priceCzk) : Number(offer.price);
       const currency = Number.isFinite(Number(offer.priceCzk)) ? 'CZK' : (offer.currency || 'CZK');
+      const label = isOpenBox ? 'Idealo · rozbalené' : 'Idealo';
       return '<a href="' + escapeHtml(offer.url || offer.affiliateUrl || '#') + '" target="_blank" rel="noopener noreferrer" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 10px;border:1px solid #e5e7eb;border-radius:9px;background:#fff;font-size:13px;text-decoration:none;color:inherit;">' +
-        escapeHtml(offer.store || 'Market') +
+        escapeHtml(label) +
         '<strong style="white-space:nowrap;">' + formatPrice(price, currency) + ' ↗</strong></a>';
     }).join('') +
     '</div></div>';
