@@ -9,14 +9,20 @@ const PRODUCTS = {
   "trezor-safe-3": {
     name: "Trezor Safe 3",
     url: "https://www.idealo.de/preisvergleich/OffersOfProduct/205145125_-safe-3-trezor.html",
+    min: 40,
+    max: 150,
   },
   "trezor-safe-5": {
     name: "Trezor Safe 5",
     url: "https://www.idealo.de/preisvergleich/OffersOfProduct/206151813_-safe-5-trezor.html",
+    min: 80,
+    max: 220,
   },
   "trezor-safe-7": {
     name: "Trezor Safe 7",
     url: "https://www.idealo.de/preisvergleich/OffersOfProduct/209319953_-trezor-safe-7-trezor.html",
+    min: 150,
+    max: 400,
   },
 };
 
@@ -35,13 +41,21 @@ function saveProducts(products) {
   }
 }
 
-function extractLowestPrice(text) {
+function extractProductPrice(text, config) {
   const source = String(text || "").replace(/[\u00a0\u202f]/g, " ");
-  const matches = [...source.matchAll(/(?:ab|günstigster\s+preis)\s*([0-9]{1,3}(?:[.,][0-9]{2})?)\s*€/gi)];
+  const productIndex = source.toLowerCase().indexOf(config.name.toLowerCase());
+  if (productIndex < 0) return null;
+
+  // Idealo places the product summary immediately after the title. Restrict
+  // parsing to that local region so dimensions/other unrelated prices cannot
+  // be mistaken for the product price.
+  const section = source.slice(productIndex, productIndex + 1200);
+  const matches = [...section.matchAll(/\bab\s+([0-9]{1,3}(?:[.,][0-9]{2})?)\s*€/gi)];
   const prices = matches
     .map((m) => Number(String(m[1]).replace(",", ".")))
-    .filter((n) => Number.isFinite(n) && n >= 20 && n <= 500);
-  return prices.length ? Math.min(...prices) : null;
+    .filter((n) => Number.isFinite(n) && n >= config.min && n <= config.max);
+
+  return prices.length ? prices[0] : null;
 }
 
 async function fetchReader(url) {
@@ -59,7 +73,6 @@ async function updateIdealo() {
   const products = loadProducts();
   if (!Array.isArray(products)) return;
 
-  // Keep the latest ECB rate already stored by the normal collector.
   let changed = false;
 
   for (const [slug, config] of Object.entries(PRODUCTS)) {
@@ -68,9 +81,9 @@ async function updateIdealo() {
 
     try {
       const text = await fetchReader(config.url);
-      const price = extractLowestPrice(text);
+      const price = extractProductPrice(text, config);
       if (!Number.isFinite(price)) {
-        console.log(`Idealo: ${config.name} price not found`);
+        console.log(`Idealo: ${config.name} valid price not found`);
         continue;
       }
 
