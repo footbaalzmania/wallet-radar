@@ -5,19 +5,10 @@ const productsPath = path.join(__dirname, "products.json");
 const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const TIMEOUT_MS = 25_000;
 
-const TrezorProducts = {
-  "trezor-safe-3": {
-    name: "Trezor Safe 3",
-    url: "https://trezor.io/cs/trezor-safe-3",
-  },
-  "trezor-safe-5": {
-    name: "Trezor Safe 5",
-    url: "https://trezor.io/cs/trezor-safe-5",
-  },
-  "trezor-safe-7": {
-    name: "Trezor Safe 7",
-    url: "https://trezor.io/cs/trezor-safe-7",
-  },
+const TREZOR_PRODUCTS = {
+  "trezor-safe-3": { name: "Trezor Safe 3", url: "https://trezor.io/cs/trezor-safe-3" },
+  "trezor-safe-5": { name: "Trezor Safe 5", url: "https://trezor.io/cs/trezor-safe-5" },
+  "trezor-safe-7": { name: "Trezor Safe 7", url: "https://trezor.io/cs/trezor-safe-7" },
 };
 
 function loadProducts() {
@@ -40,32 +31,22 @@ function saveProducts(products) {
   }
 }
 
-function stripHtml(value) {
+function cleanText(value) {
   return String(value || "")
-    .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
-    .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
-    .replace(/&#x27;/gi, "'")
-    .replace(/\\s+/g, " ")
-    .trim();
-}
-
-function normalizeText(value) {
-  return String(value || "")
-    .replace(/\\u00a0/g, " ")
-    .replace(/[–—]/g, "-")
-    .replace(/\\s+/g, " ")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function extractPrices(text) {
-  const normalized = normalizeText(text);
+  const normalized = cleanText(text);
   const matches = [];
-  const re = /(\\d{1,3}(?:[ .]\\d{3})+|\\d{3,5})\\s*(?:Kč|CZK|,-)/gi;
+  const re = /(\d{1,3}(?:[ .]\d{3})+|\d{3,5})\s*(?:Kč|CZK|,-)/gi;
   let match;
 
   while ((match = re.exec(normalized))) {
@@ -79,15 +60,15 @@ function extractPrices(text) {
 }
 
 function findPriceNearProduct(text, productName) {
-  const normalized = normalizeText(text);
+  const normalized = cleanText(text);
   const lower = normalized.toLowerCase();
   const needle = productName.toLowerCase();
   const prices = extractPrices(normalized);
 
   let from = lower.indexOf(needle);
   while (from !== -1) {
-    const after = prices.find((item) => item.index >= from && item.index <= from + 1800);
-    if (after) return after.price;
+    const candidate = prices.find((item) => item.index >= from && item.index <= from + 1800);
+    if (candidate) return candidate.price;
     from = lower.indexOf(needle, from + needle.length);
   }
 
@@ -120,9 +101,7 @@ async function fetchTrezorProductText(url) {
     return await fetchText(url);
   } catch (directErr) {
     console.warn(`Trezor official: direct fetch failed (${directErr.message}), trying reader`);
-
-    const readerUrl = `https://r.jina.ai/${url}`;
-    return await fetchText(readerUrl);
+    return await fetchText(`https://r.jina.ai/${url}`);
   }
 }
 
@@ -130,17 +109,15 @@ async function updateOfficialPrices() {
   const products = loadProducts();
   if (!products.length) return;
 
-  const today = new Date().toISOString().slice(0, 10);
   let changed = false;
 
-  for (const [slug, config] of Object.entries(TrezorProducts)) {
+  for (const [slug, config] of Object.entries(TREZOR_PRODUCTS)) {
     const product = products.find((item) => item.slug === slug);
     if (!product) continue;
 
     try {
       const raw = await fetchTrezorProductText(config.url);
-      const text = stripHtml(raw);
-      let price = findPriceNearProduct(text, config.name);
+      const price = findPriceNearProduct(raw, config.name);
 
       if (!Number.isFinite(price)) {
         console.warn(`Trezor official: ${config.name} price not found`);
@@ -155,7 +132,6 @@ async function updateOfficialPrices() {
 
       product.officialPriceSource = "trezor.io";
       product.officialPriceUpdatedAt = new Date().toISOString();
-
       console.log(`Trezor official: ${config.name} = ${price} CZK`);
     } catch (err) {
       console.error(`Trezor official: ${config.name} update failed:`, err.message);
@@ -164,7 +140,7 @@ async function updateOfficialPrices() {
 
   if (changed) {
     saveProducts(products);
-    console.log(`Trezor official: prices saved (${today})`);
+    console.log("Trezor official: prices saved");
   } else {
     console.log("Trezor official: no price changes");
   }
