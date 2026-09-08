@@ -41,30 +41,55 @@ function saveProducts(products) {
   }
 }
 
-function extractProductPrice(text, config) {
+function parsePrice(value) {
+  const price = Number(String(value).replace(",", "."));
+  return Number.isFinite(price) ? price : null;
+}
+
+function validPrice(value, config) {
+  return Number.isFinite(value) && value >= config.min && value <= config.max;
+}
+
+function findProductSection(source, config) {
+  const escapedName = config.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const heading = new RegExp(`#\\s*(?:Trezor\\s+)?${escapedName}\\b`, "i").exec(source);
+  if (!heading) return null;
+
+  const start = heading.index;
+  const top10 = source.toLowerCase().indexOf("top 10 produkte", start + heading[0].length);
+  const end = top10 >= 0 ? top10 : Math.min(source.length, start + 8000);
+  return source.slice(start, end);
+}
+
+function extractIdealoPrices(text, config) {
   const source = String(text || "")
     .replace(/[\u00a0\u202f]/g, " ")
     .replace(/\r/g, "");
 
-  const lower = source.toLowerCase();
-  const productIndex = lower.indexOf(config.name.toLowerCase());
-  if (productIndex < 0) return null;
+  const section = findProductSection(source, config);
+  if (!section) return { standard: null, openBox: null };
 
-  // Idealo/Jina can flatten Markdown headings and line breaks differently.
-  // Therefore don't require a specific heading syntax. The product summary
-  // appears immediately after the first product heading and contains "ab X €".
-  // Limit the window so later recommendation/"Top 10" prices cannot win.
-  const section = source.slice(productIndex, productIndex + 1200);
-  const matches = [...section.matchAll(/\bab\s+([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/gi)];
+  // Main product-summary price: e.g. "3 Varianten ab 119,00 €".
+  const summary = section.match(/\bab\s+([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/i);
+  const standard = summary ? parsePrice(summary[1]) : null;
 
-  for (const match of matches) {
-    const price = Number(String(match[1]).replace(",", "."));
-    if (Number.isFinite(price) && price >= config.min && price <= config.max) {
-      return price;
-    }
+  // Idealo may also expose an offer such as
+  // "Neuware mit geöffneter Verpackung". The price belongs to that offer
+  // and must not replace the standard new-product price.
+  let openBox = null;
+  const openBoxMatch = /geöffnete?r?\s+verpackung/i.exec(section);
+  if (openBoxMatch) {
+    const before = section.slice(Math.max(0, openBoxMatch.index - 500), openBoxMatch.index);
+    const prices = [...before.matchAll(/([0-9]{1,4}(?:[.,][0-9]{2})?)\s*€/g)]
+      .map((match) => parsePrice(match[1]))
+      .filter((price) => validPrice(price, config));
+    if (prices.length) openBox = prices[prices.length - 1];
   }
 
-  return null;
+  return {
+    standard: validPrice(standard, config) ? standard : null,
+    openBox: validPrice(openBox, config) ? openBox : null,
+  };
 }
 
 async function fetchReader(url) {
@@ -76,6 +101,31 @@ async function fetchReader(url) {
   });
   if (!response.ok) throw new Error(`Reader returned HTTP ${response.status}`);
   return response.text();
+}
+
+function upsertOffer(product, store, price, config, url) {
+  if (!Number.isFinite(price)) return false;
+  if (!Array.isArray(product.offers)) product.offers = [];
+
+  let offer = product.offers.find((item) => String(item.store || "").toLowerCase() === store.toLowerCase());
+  if (!offer) {
+    product.offers.push({
+      store,
+      price,
+      currency: "EUR",
+      priceSource: "automatic",
+      affiliateUrl: null,
+      url,
+    });
+    return true;
+  }
+
+  let changed = false;
+  if (Number(offer.price) !== price) { offer.price = price; changed = true; }
+  if (offer.currency !== "EUR") { offer.currency = "EUR"; changed = true; }
+  if (offer.priceSource !== "automatic") { offer.priceSource = "automatic"; changed = true; }
+  if (offer.url !== url) { offer.url = url; changed = true; }
+  return changed;
 }
 
 async function updateIdealo() {
@@ -90,34 +140,19 @@ async function updateIdealo() {
 
     try {
       const text = await fetchReader(config.url);
-      const price = extractProductPrice(text, config);
-      if (!Number.isFinite(price)) {
-        console.log(`Idealo: ${config.name} valid minimum price not found`);
-        continue;
-      }
+      const prices = extractIdealoPrices(text, config);
 
-      if (!Array.isArray(product.offers)) product.offers = [];
-      let offer = product.offers.find((item) => String(item.store || "").toLowerCase() === "idealo");
-
-      if (!offer) {
-        offer = {
-          store: "Idealo",
-          price,
-          currency: "EUR",
-          priceSource: "automatic",
-          affiliateUrl: null,
-          url: config.url,
-        };
-        product.offers.push(offer);
-        changed = true;
+      if (!Number.isFinite(prices.standard)) {
+        console.log(`Idealo: ${config.name} standard price not found`);
       } else {
-        if (Number(offer.price) !== price) { offer.price = price; changed = true; }
-        if (offer.currency !== "EUR") { offer.currency = "EUR"; changed = true; }
-        if (offer.priceSource !== "automatic") { offer.priceSource = "automatic"; changed = true; }
-        if (offer.url !== config.url) { offer.url = config.url; changed = true; }
+        changed = upsertOffer(product, "Idealo", prices.standard, config, config.url) || changed;
+        console.log(`Idealo: ${config.name} standard = ${prices.standard.toFixed(2)} EUR`);
       }
 
-      console.log(`Idealo: ${config.name} = ${price.toFixed(2)} EUR`);
+      if (Number.isFinite(prices.openBox)) {
+        changed = upsertOffer(product, "Idealo Open Box", prices.openBox, config, config.url) || changed;
+        console.log(`Idealo: ${config.name} open box = ${prices.openBox.toFixed(2)} EUR`);
+      }
     } catch (err) {
       console.error(`Idealo: ${config.name} update failed:`, err.message);
     }
