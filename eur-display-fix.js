@@ -23,10 +23,15 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
 
       // Exact renderer string used by Deal Radar.
       // Only the displayed currency label changes; price values/data stay intact.
+      const before = html;
       html = html.replace(
         "}).format(value) + ' CZK';",
         "}).format(value) + ' €';"
       );
+
+      if (html !== before) {
+        console.log('EUR display fix: Deal Radar currency label corrected');
+      }
 
       chunk = Buffer.isBuffer(chunk) ? Buffer.from(html) : html;
     }
