@@ -71,7 +71,10 @@ http.ServerResponse.prototype.end = function (chunk, encoding, callback) {
                 'class="hero-card"',
                 'class="hero-card wallets-deal-radar"'
               )
-              .replace(/\\sCZK\\b/g, " €");
+              // Deal Radar is displayed in EUR throughout the app.
+              // Replace the currency code wherever it appears in the moved card,
+              // including the Official price and Market price values.
+              .replace(/\bCZK\b/g, "€");
 
             const insertion = `\n\n          ${radarCard}`;
             const insertionPoint = updatedWalletGrid.end;
