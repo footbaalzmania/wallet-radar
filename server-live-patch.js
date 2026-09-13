@@ -31,6 +31,26 @@ function getOpenBoxOffer(product) {
     .filter((offer) => Number.isFinite(marketPriceEur(offer)))
     .sort((a, b) => marketPriceEur(a) - marketPriceEur(b))[0] || null;
 }
+
+function historyPriceEur(item, product) {
+  if (!item) return null;
+  const store = String(item.store || '').toLowerCase();
+  const originalCurrency = String(item.originalCurrency || '').toUpperCase();
+  const currency = String(item.currency || '').toUpperCase();
+  const rate = Number(item.exchangeRate) || 24.8;
+
+  // EUR-source observations stay in EUR. Never reinterpret them as CZK.
+  if (originalCurrency === 'EUR' && Number.isFinite(Number(item.originalPrice))) return Number(item.originalPrice);
+  if (currency === 'EUR' && Number.isFinite(Number(item.price))) return Number(item.price);
+
+  // Czech retailers are stored in CZK. Convert only for the unified EUR display.
+  const isCzkStore = store === 'alza' || store === 'heureka' || store === 'czc';
+  if (isCzkStore && Number.isFinite(Number(item.price))) return Number(item.price) / rate;
+  if (Number.isFinite(Number(item.priceCzk)) && Number.isFinite(rate)) return Number(item.priceCzk) / rate;
+  if (currency === 'CZK' && Number.isFinite(Number(item.price))) return Number(item.price) / rate;
+
+  return Number.isFinite(Number(item.price)) ? Number(item.price) : null;
+}
 `;
 
   const replacements = [
@@ -121,12 +141,7 @@ function getMarketOffers(product) {
   return product.priceHistory
     .filter((item) => item && Number.isFinite(Number(item.price)) && item.date)
     .map((item) => {
-      const currency = String(item.currency || product.currency || "CZK").toUpperCase();
-      let price = Number(item.price);
-      const rate = Number(item.exchangeRate) || 24.8;
-      if (currency === "EUR") price = Number(item.originalPrice ?? item.price);
-      else if (Number.isFinite(Number(item.priceCzk))) price = Number(item.priceCzk) / rate;
-      else if (currency === "CZK") price = price / rate;
+      const price = historyPriceEur(item, product);
       return { ...item, price, currency: "EUR" };
     })
     .filter((item) => Number.isFinite(item.price) && item.price > 0)
