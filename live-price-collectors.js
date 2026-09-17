@@ -67,28 +67,38 @@ function walkJson(value, callback) {
   }
 }
 
+function eurOfferPrice(node) {
+  const offers = node && node.offers;
+  if (!offers) return null;
+  const list = Array.isArray(offers) ? offers : [offers];
+  for (const offer of list) {
+    const currency = String(offer?.priceCurrency || '').toUpperCase();
+    const price = Number(offer?.price);
+    if (currency === 'EUR' && Number.isFinite(price) && price > 10 && price < 1000) return price;
+  }
+  return null;
+}
+
 function extractPrice(html, marker) {
+  const markerLower = marker.toLowerCase();
+
+  // Prefer a JSON-LD Product node whose own name matches the requested product.
+  // The old parser accepted the first EUR offer on the page, which could be an
+  // accessory (for example a €25 case) instead of the wallet itself.
   for (const root of parseJsonLd(html)) {
-    let found = null;
+    let targeted = null;
     walkJson(root, (node) => {
-      if (found !== null) return;
-      const offers = node && node.offers;
-      if (!offers) return;
-      const list = Array.isArray(offers) ? offers : [offers];
-      for (const offer of list) {
-        const currency = String(offer?.priceCurrency || '').toUpperCase();
-        const price = Number(offer?.price);
-        if (currency === 'EUR' && Number.isFinite(price) && price > 0) {
-          found = price;
-          break;
-        }
-      }
+      if (targeted !== null) return;
+      const name = String(node?.name || '').toLowerCase();
+      if (!name.includes(markerLower)) return;
+      const price = eurOfferPrice(node);
+      if (price !== null) targeted = price;
     });
-    if (found !== null) return found;
+    if (targeted !== null) return targeted;
   }
 
   const text = decodeHtml(clean(html));
-  const markerIndex = text.toLowerCase().indexOf(marker.toLowerCase());
+  const markerIndex = text.toLowerCase().indexOf(markerLower);
   const windows = markerIndex >= 0
     ? [text.slice(markerIndex, markerIndex + 6000), text]
     : [text];
