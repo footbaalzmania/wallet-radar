@@ -16,6 +16,9 @@ Module._extensions['.js'] = function(module, filename) {
   if (!source.includes("const sourceEngine = require('./source-engine.js');")) {
     source = "const sourceEngine = require('./source-engine.js');\n" + source;
   }
+  if (!source.includes('const marketPriceEur = sourceEngine.priceInEur;')) {
+    source = "const marketPriceEur = sourceEngine.priceInEur;\n" + source;
+  }
 
   const replacements = [
     [`function getMarketOffers(product) {
