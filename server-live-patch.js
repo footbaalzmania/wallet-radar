@@ -94,6 +94,22 @@ function getMarketOffers(product) {
 `function getMarketCurrency(product) {
   return "EUR";
 }`],
+    [`function getOfficialPrice(product) {
+  if (!product) {
+    return null;
+  }
+
+  const price = Number(product.officialPrice);
+
+  return Number.isFinite(price) ? price : null;
+}`,
+`function getOfficialPrice(product) {
+  if (!product) return null;
+  const eur = Number(product.officialPriceEur);
+  if (Number.isFinite(eur) && eur > 0) return eur;
+  const price = Number(product.officialPrice);
+  return Number.isFinite(price) ? price : null;
+}`],
     [`function getOfficialPriceCurrency(product) {
   return product?.officialPriceCurrency || product?.currency || "CZK";
 }`,
