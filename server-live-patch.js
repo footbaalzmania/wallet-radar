@@ -9,6 +9,11 @@ Module._extensions['.js'] = function(module, filename) {
 
   let source = fs.readFileSync(filename, 'utf8');
 
+  // sourceRegistry is used inside the compiled server.js scope too.
+  if (!source.includes("const sourceRegistry = require('./source-registry.js');")) {
+    source = "const sourceRegistry = require('./source-registry.js');\n" + source;
+  }
+
   const marketHelpers = `
 function marketPriceEur(offer) {
   if (!offer) return null;
@@ -169,7 +174,6 @@ function getMarketOffers(product) {
     else console.warn('WalletRadar data patch: target not found');
   }
 
-  // The UI owns rendering. Price collectors and currency normalization stay here.
   source = ui.replaceWalletRenderer(source);
 
   const requestMarker = '    try {\n      const requestUrl = new URL(';
