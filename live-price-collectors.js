@@ -34,7 +34,7 @@ function saveProducts(products) {
 }
 
 function clean(value) {
-  return String(value || '').replace(/\\s+/g, ' ').trim();
+  return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 function decodeHtml(value) {
@@ -47,7 +47,7 @@ function decodeHtml(value) {
 
 function parseJsonLd(html) {
   const values = [];
-  const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\\s\\S]*?)<\/script>/gi;
+  const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let match;
   while ((match = re.exec(html))) {
     try {
@@ -94,7 +94,7 @@ function extractPrice(html, marker) {
     : [text];
 
   for (const window of windows) {
-    const matches = [...window.matchAll(/(?:€|EUR\\s*)([0-9]{1,4}(?:[.,][0-9]{1,2})?)/gi)];
+    const matches = [...window.matchAll(/(?:€|EUR\s*)([0-9]{1,4}(?:[.,][0-9]{1,2})?)/gi)];
     const prices = matches
       .map((m) => Number(String(m[1]).replace(',', '.')))
       .filter((n) => Number.isFinite(n) && n > 10 && n < 1000);
@@ -174,7 +174,7 @@ async function runCollector(collector) {
 
   let updated = 0;
   let attempted = 0;
-  let failures = [];
+  const failures = [];
 
   for (const item of collector.products) {
     const product = products.find((entry) => entry.slug === item.slug);
@@ -195,12 +195,10 @@ async function runCollector(collector) {
   if (failures.length === 0) {
     health.success(collector.sourceId, updated);
   } else if (updated > 0) {
-    health.failure(collector.sourceId, 'partial', failures.join('; '));
-    const current = health.snapshot()[collector.sourceId];
-    current.productsUpdated = updated;
+    health.success(collector.sourceId, updated, 'partial', failures.join('; '));
   } else {
-    const blocked = failures.some((item) => /HTTP (403|429)|unavailable/i.test(item));
-    health.failure(collector.sourceId, blocked ? 'blocked' : 'no-price', failures.join('; '));
+    const blocked = failures.some((item) => /HTTP (403|429)/i.test(item));
+    health.failure(collector.sourceId, blocked ? 'blocked' : 'no-price', failures.join('; '), updated);
   }
 
   console.log(`${collector.name}: ${attempted - failures.length}/${attempted} prices collected; ${updated} updates`);
