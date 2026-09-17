@@ -1,0 +1,52 @@
+[
+  {
+    "id": "trezor-official",
+    "name": "Trezor Official Store",
+    "type": "official",
+    "country": "EU",
+    "currency": "EUR",
+    "enabled": true,
+    "priceMode": "live",
+    "affiliate": false
+  },
+  {
+    "id": "idealo",
+    "name": "Idealo",
+    "type": "price-comparison",
+    "country": "EU",
+    "currency": "EUR",
+    "enabled": true,
+    "priceMode": "live",
+    "affiliate": false
+  },
+  {
+    "id": "alza",
+    "name": "Alza",
+    "type": "retailer",
+    "country": "CZ",
+    "currency": "CZK",
+    "enabled": true,
+    "priceMode": "live",
+    "affiliate": false
+  },
+  {
+    "id": "heureka",
+    "name": "Heureka",
+    "type": "price-comparison",
+    "country": "CZ",
+    "currency": "CZK",
+    "enabled": true,
+    "priceMode": "live",
+    "affiliate": false
+  },
+  {
+    "id": "amazon-de",
+    "name": "Amazon.de",
+    "type": "retailer",
+    "country": "DE",
+    "currency": "EUR",
+    "enabled": true,
+    "priceMode": "live",
+    "affiliate": false
+  }
+]
