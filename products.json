@@ -143,5 +143,23 @@
     "offers": [],
     "priceHistory": [],
     "lastUpdated": "2026-09-17"
+  },
+  {
+    "category": "Hardware Wallet",
+    "subcategory": "Hardware Wallet",
+    "brand": "BitBox",
+    "model": "BitBox02",
+    "variant": "Multi",
+    "name": "BitBox02 Multi",
+    "slug": "bitbox02-multi",
+    "currency": "EUR",
+    "productUrl": "https://shop.bitbox.swiss/de/products/bitbox02-80/",
+    "officialSourceId": "bitbox-official",
+    "officialPrice": 149,
+    "officialPriceCurrency": "EUR",
+    "officialPriceEur": 149,
+    "offers": [],
+    "priceHistory": [],
+    "lastUpdated": "2026-09-17"
   }
 ]
