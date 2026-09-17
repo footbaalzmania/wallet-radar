@@ -25,8 +25,17 @@ function replaceWalletRenderer(source) {
   const scoreLabel = score === null ? 'Building history' : score + '/100';
   const differenceText = Number.isFinite(difference) ? (difference > 0 ? '+' : '') + money(difference, marketCurrency) : '—';
   const differencePctText = Number.isFinite(differencePercent) ? (differencePercent > 0 ? '+' : '') + differencePercent.toFixed(1) + '%' : '—';
-  const offers = (Array.isArray(product.offers) ? product.offers : []).filter((offer) => Number.isFinite(Number(offer.price))).map((offer) => ({ offer, price: typeof marketPriceEur === 'function' ? marketPriceEur(offer) : Number(offer.price) })).filter((item) => Number.isFinite(item.price)).sort((a,b) => a.price-b.price);
-  const offerRows = offers.slice(0,4).map(({offer,price}) => { const label=escapeHtml(offer.store || 'Market'); const currency=String(offer.originalCurrency || offer.currency || 'EUR').toUpperCase(); const displayPrice=currency==='EUR' && typeof marketPriceEur==='function' ? money(price,'EUR') : money(offer.price,currency); const url=offer.url || offer.affiliateUrl || '#'; return \`<a class="wr-offer-row" href="\${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><span><strong>\${label}</strong><small>\${offer.condition === 'open-box' ? 'Open-box' : 'New'}</small></span><b>\${displayPrice}</b><span class="wr-offer-arrow">↗</span></a>\`; }).join('');
+  const offers = (Array.isArray(product.offers) ? product.offers : [])
+    .filter((offer) => Number.isFinite(Number(offer.price)))
+    .map((offer) => ({ offer, price: typeof marketPriceEur === 'function' ? marketPriceEur(offer) : Number(offer.price) }))
+    .filter((item) => Number.isFinite(item.price))
+    .sort((a,b) => a.price-b.price);
+  const offerRows = offers.slice(0,4).map(({offer,price}) => {
+    const label=escapeHtml(offer.store || offer.sourceName || 'Market');
+    const displayPrice=money(price,'EUR');
+    const url=offer.url || offer.affiliateUrl || '#';
+    return \`<a class="wr-offer-row" href="\${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><span><strong>\${label}</strong><small>\${offer.condition === 'open-box' ? 'Open-box' : 'New'}</small></span><b>\${displayPrice}</b><span class="wr-offer-arrow">↗</span></a>\`;
+  }).join('');
   const marketSection = offerRows ? \`<div class="wr-market-list"><div class="wr-subtitle">Tracked market</div>\${offerRows}</div>\` : '<div class="wr-empty">Market offers are being added automatically.</div>';
   return \`<article class="wallet-card">\${image}<div class="wallet-content"><div class="wallet-brand">\${escapeHtml(product.brand || '')}</div><div class="wallet-name">\${escapeHtml(product.name || '')}</div><div class="wr-price-main"><span>Official price</span><strong>\${money(officialPrice,officialCurrency)}</strong><small>Market from \${Number.isFinite(marketPrice) ? money(marketPrice,marketCurrency) : '—'}</small></div><section class="wr-deal-radar \${statusClass}" aria-label="Deal Radar"><div class="wr-radar-head"><div><span class="wr-radar-kicker">Deal Radar</span><strong>\${scoreLabel}</strong></div><span class="wr-radar-status">\${escapeHtml(status)}</span></div><div class="wr-radar-grid"><div><small>Official</small><b>\${money(officialPrice,officialCurrency)}</b></div><div><small>Best market</small><b>\${Number.isFinite(marketPrice) ? money(marketPrice,marketCurrency) : '—'}</b></div><div><small>Difference</small><b>\${differenceText}</b></div><div><small>Vs. official</small><b>\${differencePctText}</b></div></div></section>\${marketSection}<div class="wallet-actions"><a href="/go/\${escapeHtml(product.slug)}" class="buy-button">Buy at official store</a><a href="/product/\${escapeHtml(product.slug)}" class="secondary-button">Price history</a></div></div></article>\`;
 }
