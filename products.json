@@ -10,11 +10,13 @@
     "image": "/trezor-safe-3.avif",
     "currency": "CZK",
     "productUrl": "https://trezor.io/cs/trezor-safe-3",
+    "officialSourceId": "trezor-official",
     "officialPrice": 1439,
     "officialPriceCurrency": "CZK",
     "officialPriceEur": 59,
     "offers": [
       {
+        "sourceId": "alza",
         "store": "Alza",
         "price": 1499,
         "currency": "CZK",
@@ -27,7 +29,8 @@
       {
         "date": "2026-09-04",
         "price": 1499,
-        "currency": "CZK"
+        "currency": "CZK",
+        "sourceId": "alza"
       }
     ],
     "lastUpdated": "2026-09-04"
@@ -43,11 +46,13 @@
     "image": "/trezor-safe-5.avif",
     "currency": "CZK",
     "productUrl": "https://trezor.io/cs/trezor-safe-5",
+    "officialSourceId": "trezor-official",
     "officialPrice": 3149,
     "officialPriceCurrency": "CZK",
     "officialPriceEur": 129,
     "offers": [
       {
+        "sourceId": "alza",
         "store": "Alza",
         "price": 3199,
         "currency": "CZK",
@@ -60,7 +65,8 @@
       {
         "date": "2026-09-04",
         "price": 3199,
-        "currency": "CZK"
+        "currency": "CZK",
+        "sourceId": "alza"
       }
     ],
     "lastUpdated": "2026-09-04"
@@ -76,6 +82,7 @@
     "image": "/trezor-safe-7.avif",
     "currency": "CZK",
     "productUrl": "https://trezor.io/cs/trezor-safe-7",
+    "officialSourceId": "trezor-official",
     "officialPrice": 6089,
     "officialPriceCurrency": "CZK",
     "officialPriceEur": 249,
@@ -93,6 +100,7 @@
     "slug": "ledger-nano-s-plus",
     "currency": "EUR",
     "productUrl": "https://shop.ledger.com/products/ledger-nano-s-plus",
+    "officialSourceId": "ledger-official",
     "officialPrice": 79,
     "officialPriceCurrency": "EUR",
     "officialPriceEur": 79,
@@ -110,6 +118,7 @@
     "slug": "ledger-nano-x",
     "currency": "EUR",
     "productUrl": "https://shop.ledger.com/products/ledger-nano-x",
+    "officialSourceId": "ledger-official",
     "officialPrice": 149,
     "officialPriceCurrency": "EUR",
     "officialPriceEur": 149,
@@ -127,6 +136,7 @@
     "slug": "ledger-flex",
     "currency": "EUR",
     "productUrl": "https://shop.ledger.com/products/ledger-flex",
+    "officialSourceId": "ledger-official",
     "officialPrice": 249,
     "officialPriceCurrency": "EUR",
     "officialPriceEur": 249,
