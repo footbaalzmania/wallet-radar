@@ -79,12 +79,8 @@ function eurOfferPrice(node) {
   return null;
 }
 
-function extractPrice(html, marker) {
+function extractTargetedJsonLdPrice(html, marker) {
   const markerLower = marker.toLowerCase();
-
-  // Prefer a JSON-LD Product node whose own name matches the requested product.
-  // The old parser accepted the first EUR offer on the page, which could be an
-  // accessory (for example a €25 case) instead of the wallet itself.
   for (const root of parseJsonLd(html)) {
     let targeted = null;
     walkJson(root, (node) => {
@@ -96,25 +92,44 @@ function extractPrice(html, marker) {
     });
     if (targeted !== null) return targeted;
   }
-
-  const text = decodeHtml(clean(html));
-  const markerIndex = text.toLowerCase().indexOf(markerLower);
-  const windows = markerIndex >= 0
-    ? [text.slice(markerIndex, markerIndex + 6000), text]
-    : [text];
-
-  for (const window of windows) {
-    const matches = [...window.matchAll(/(?:€|EUR\s*)([0-9]{1,4}(?:[.,][0-9]{1,2})?)/gi)];
-    const prices = matches
-      .map((m) => Number(String(m[1]).replace(',', '.')))
-      .filter((n) => Number.isFinite(n) && n > 10 && n < 1000);
-    if (prices.length) return prices[0];
-  }
-
   return null;
 }
 
-async function fetchPrice(item) {
+function extractNearbyTextPrice(html, marker, baselinePrice) {
+  const text = decodeHtml(clean(html));
+  const lower = text.toLowerCase();
+  const markerIndex = lower.indexOf(marker.toLowerCase());
+  if (markerIndex < 0) return null;
+
+  // Never scan the whole page: accessory/recommendation prices elsewhere on a
+  // store page are not valid prices for the requested product.
+  const window = text.slice(Math.max(0, markerIndex - 1200), markerIndex + 2200);
+  const matches = [...window.matchAll(/(?:€\s*|EUR\s*)([0-9]{1,4}(?:[.,][0-9]{1,2})?)/gi)];
+  const prices = matches
+    .map((m) => Number(String(m[1]).replace(',', '.')))
+    .filter((n) => Number.isFinite(n) && n > 10 && n < 1000);
+
+  if (!prices.length) return null;
+
+  // Safety gate: a generic €25 accessory was the exact failure mode we hit.
+  // Only accept a text fallback if it is plausibly close to the existing
+  // catalog price. Otherwise report no-price and keep the trusted catalog value.
+  if (Number.isFinite(baselinePrice) && baselinePrice > 0) {
+    const plausible = prices.find((price) => price >= baselinePrice * 0.5 && price <= baselinePrice * 1.5);
+    if (plausible !== undefined) return plausible;
+    return null;
+  }
+
+  return prices[0];
+}
+
+function extractPrice(html, marker, baselinePrice) {
+  const structured = extractTargetedJsonLdPrice(html, marker);
+  if (structured !== null) return structured;
+  return extractNearbyTextPrice(html, marker, baselinePrice);
+}
+
+async function fetchPrice(item, product) {
   const response = await fetch(item.url, {
     redirect: 'follow',
     headers: {
@@ -131,9 +146,10 @@ async function fetchPrice(item) {
     throw error;
   }
 
-  const price = extractPrice(html, item.marker);
+  const baselinePrice = Number(product.officialPriceEur || product.officialPrice);
+  const price = extractPrice(html, item.marker, baselinePrice);
   if (!Number.isFinite(price)) {
-    const error = new Error('Official page loaded but no EUR product price was found');
+    const error = new Error('Official page loaded but no trustworthy EUR product price was found');
     error.code = 'no-price';
     throw error;
   }
@@ -191,7 +207,7 @@ async function runCollector(collector) {
     if (!product) continue;
     attempted += 1;
     try {
-      const price = await fetchPrice(item);
+      const price = await fetchPrice(item, product);
       if (updateProduct(product, collector.sourceId, price, item.url)) updated += 1;
       console.log(`${collector.name}: ${product.name} = ${price} EUR`);
     } catch (error) {
