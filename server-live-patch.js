@@ -5,16 +5,21 @@ const ui = require('./wallet-radar-ui.js');
 const sourceEngine = require('./source-engine.js');
 const sourceRegistry = require('./source-registry.js');
 
+// Keep the Source Engine outside the transformed server.js lexical scope.
+// This avoids TDZ collisions with other runtime patches that may transform server.js.
+global.__walletRadarSourceEngine = sourceEngine;
+global.__walletRadarSourceRegistry = sourceRegistry;
+
 Module._extensions['.js'] = function(module, filename) {
   if (!filename.endsWith('/server.js')) return original(module, filename);
 
   let source = fs.readFileSync(filename, 'utf8');
 
-  if (!source.includes("const sourceRegistry = require('./source-registry.js');")) {
-    source = "const sourceRegistry = require('./source-registry.js');\n" + source;
+  if (!source.includes("const sourceRegistry = global.__walletRadarSourceRegistry;")) {
+    source = "const sourceRegistry = global.__walletRadarSourceRegistry;\n" + source;
   }
-  if (!source.includes("const sourceEngine = require('./source-engine.js');")) {
-    source = "const sourceEngine = require('./source-engine.js');\n" + source;
+  if (!source.includes("const sourceEngine = global.__walletRadarSourceEngine;")) {
+    source = "const sourceEngine = global.__walletRadarSourceEngine;\n" + source;
   }
   if (!source.includes('const marketPriceEur = sourceEngine.priceInEur;')) {
     source = "const marketPriceEur = sourceEngine.priceInEur;\n" + source;
