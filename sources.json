@@ -10,6 +10,16 @@
     "affiliate": false
   },
   {
+    "id": "ledger-official",
+    "name": "Ledger Official Store",
+    "type": "official",
+    "country": "EU",
+    "currency": "EUR",
+    "enabled": true,
+    "priceMode": "live",
+    "affiliate": false
+  },
+  {
     "id": "idealo",
     "name": "Idealo",
     "type": "price-comparison",
