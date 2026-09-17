@@ -20,6 +20,16 @@
     "affiliate": false
   },
   {
+    "id": "bitbox-official",
+    "name": "BitBox Official Store",
+    "type": "official",
+    "country": "EU",
+    "currency": "EUR",
+    "enabled": true,
+    "priceMode": "live",
+    "affiliate": false
+  },
+  {
     "id": "idealo",
     "name": "Idealo",
     "type": "price-comparison",
