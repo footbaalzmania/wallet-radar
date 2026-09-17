@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 
 const healthPath = path.join(__dirname, 'source-health.json');
-
 const DEFAULT_HEALTH = {
   status: 'unknown',
   lastAttempt: null,
@@ -39,19 +38,20 @@ function begin(sourceId) {
   save();
 }
 
-function success(sourceId, productsUpdated = 0) {
+function success(sourceId, productsUpdated = 0, status = 'ok', error = null) {
   const item = ensure(sourceId);
-  item.status = 'ok';
+  item.status = status;
   item.lastSuccess = new Date().toISOString();
-  item.lastError = null;
+  item.lastError = error;
   item.productsUpdated = Number(productsUpdated) || 0;
   save();
 }
 
-function failure(sourceId, status, error) {
+function failure(sourceId, status, error, productsUpdated = 0) {
   const item = ensure(sourceId);
   item.status = status || 'error';
   item.lastError = String(error || 'Unknown error');
+  item.productsUpdated = Number(productsUpdated) || 0;
   save();
 }
 
